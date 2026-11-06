@@ -45,7 +45,7 @@ public partial class Form1 : Form
         Text = "myzip · 파일 압축 도구";
         Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? System.Drawing.SystemIcons.Application;
         StartPosition = FormStartPosition.CenterScreen;
-        MinimumSize = new Size(840, 570);
+        MinimumSize = new Size(880, 610);
         Size = new Size(1120, 740);
         BackColor = Color.FromArgb(246, 248, 250);
         Font = new Font("Segoe UI", 9.5f);
@@ -73,7 +73,7 @@ public partial class Form1 : Form
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(20), BackColor = BackColor };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 66));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
@@ -88,7 +88,7 @@ public partial class Form1 : Form
         heading.Controls.Add(_archiveInfo, 0, 1);
         root.Controls.Add(heading, 0, 0);
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 10), BackColor = Color.White, Padding = new Padding(8, 6, 8, 6) };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 10), BackColor = Color.FromArgb(240, 246, 250), Padding = new Padding(8, 7, 8, 7), AutoScroll = true };
         actions.Controls.AddRange([_openButton, _extractButton, _testButton, Separator(), _createFilesButton, _createFolderButton]);
         root.Controls.Add(actions, 0, 1);
 
@@ -306,23 +306,31 @@ public partial class Form1 : Form
         if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) await OpenArchiveAsync(files[0]);
     }
 
-    private static Button ActionButton(string label, MenuIcon icon, bool primary = false) => new()
+    private static Button ActionButton(string label, MenuIcon icon, bool primary = false)
     {
-        Text = label,
-        Image = MenuIconFactory.Create(icon, primary ? Color.White : Color.FromArgb(29, 119, 178)),
-        ImageAlign = ContentAlignment.MiddleLeft,
-        TextImageRelation = TextImageRelation.ImageBeforeText,
-        TextAlign = ContentAlignment.MiddleCenter,
-        AutoSize = true,
-        Height = 42,
-        Margin = new Padding(4, 0, 4, 0),
-        Padding = new Padding(12, 3, 12, 3),
-        FlatStyle = FlatStyle.Flat,
-        BackColor = primary ? Color.FromArgb(26, 119, 176) : Color.White,
-        ForeColor = primary ? Color.White : Color.FromArgb(39, 58, 76),
-        Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-        Cursor = Cursors.Hand
-    };
+        var button = new Button
+        {
+            Text = label,
+            Image = MenuIconFactory.Create(icon, primary ? Color.White : Color.FromArgb(29, 119, 178), 34),
+            ImageAlign = ContentAlignment.TopCenter,
+            TextImageRelation = TextImageRelation.ImageAboveText,
+            TextAlign = ContentAlignment.BottomCenter,
+            AutoSize = false,
+            Size = new Size(148, 78),
+            Margin = new Padding(4, 0, 4, 0),
+            Padding = new Padding(5, 5, 5, 5),
+            FlatStyle = FlatStyle.Flat,
+            BackColor = primary ? Color.FromArgb(26, 119, 176) : Color.White,
+            ForeColor = primary ? Color.White : Color.FromArgb(39, 58, 76),
+            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
+            Cursor = Cursors.Hand
+        };
+        button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
+        button.FlatAppearance.BorderSize = 1;
+        button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(21, 103, 155) : Color.FromArgb(229, 243, 251);
+        button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(17, 88, 135) : Color.FromArgb(214, 234, 246);
+        return button;
+    }
 
     private static Control Separator() => new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(221, 228, 234), Margin = new Padding(8, 2, 8, 0) };
 
