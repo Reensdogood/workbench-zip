@@ -13,7 +13,7 @@ internal static partial class PreviewContent
     public static bool CanPreview(string fileName)
     {
         string ext = Path.GetExtension(fileName).ToLowerInvariant();
-        return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".txt" or ".md" or ".csv" or ".tsv" or ".log" or ".json" or ".xml" or ".ini" or ".yaml" or ".yml" or ".html" or ".htm" or ".rtf" or ".pdf" or ".docx" or ".xlsx" or ".pptx" or ".mp4" or ".mov" or ".m4v" or ".wmv" or ".avi" or ".mpg" or ".mpeg" or ".mkv" or ".webm" or ".wav" or ".mp3";
+        return ext is ".png" or ".jpg" or ".jpeg" or ".bmp" or ".gif" or ".tif" or ".tiff" or ".txt" or ".md" or ".csv" or ".tsv" or ".log" or ".json" or ".xml" or ".ini" or ".yaml" or ".yml" or ".html" or ".htm" or ".rtf" or ".pdf" or ".docx" or ".hwpx" or ".xlsx" or ".pptx" or ".mp4" or ".mov" or ".m4v" or ".wmv" or ".avi" or ".mpg" or ".mpeg" or ".mkv" or ".webm" or ".wav" or ".mp3";
     }
 
     public static bool IsVideo(string fileName) => Path.GetExtension(fileName).ToLowerInvariant() is ".mp4" or ".mov" or ".m4v" or ".wmv" or ".avi" or ".mpg" or ".mpeg" or ".mkv" or ".webm" or ".wav" or ".mp3";
@@ -32,6 +32,7 @@ internal static partial class PreviewContent
     {
         string extension = Path.GetExtension(path).ToLowerInvariant();
         if (extension == ".docx") return ReadDocx(path);
+        if (extension == ".hwpx") return ReadHwpx(path);
         if (extension == ".xlsx") return ReadXlsx(path);
         if (extension == ".pptx") return ReadPptx(path);
 
@@ -49,6 +50,30 @@ internal static partial class PreviewContent
         return string.Join(Environment.NewLine, xml.Descendants().Where(e => e.Name.LocalName == "p")
             .Select(p => string.Concat(p.Descendants().Where(e => e.Name.LocalName == "t").Select(e => e.Value)))
             .Where(line => line.Length > 0));
+    }
+
+    private static string ReadHwpx(string path)
+    {
+        using var archive = ZipFile.OpenRead(path);
+        var sections = archive.Entries
+            .Where(entry => Regex.IsMatch(entry.FullName, @"^Contents/section\d+\.xml$", RegexOptions.IgnoreCase))
+            .OrderBy(entry => SectionNumber().Match(entry.FullName).Groups[1].Value, NaturalNumberComparer.Instance)
+            .ToList();
+        if (sections.Count == 0)
+            throw new InvalidDataException("HWPX 문서 본문을 찾지 못했습니다. 파일이 손상됐거나 지원되지 않는 변형일 수 있습니다.");
+
+        var output = new StringBuilder();
+        foreach (var section in sections)
+        {
+            XDocument xml = LoadSafeXml(section);
+            foreach (var paragraph in xml.Descendants().Where(element => element.Name.LocalName == "p"))
+            {
+                string text = string.Concat(paragraph.Descendants().Where(element => element.Name.LocalName == "t").Select(element => element.Value));
+                if (text.Length > 0) output.AppendLine(text);
+            }
+            output.AppendLine();
+        }
+        return output.ToString();
     }
 
     private static string ReadXlsx(string path)
@@ -115,6 +140,9 @@ internal static partial class PreviewContent
 
     [GeneratedRegex(@"(?:sheet|slide)(\d+)\.xml$", RegexOptions.IgnoreCase)]
     private static partial Regex SlideNumber();
+
+    [GeneratedRegex(@"section(\d+)\.xml$", RegexOptions.IgnoreCase)]
+    private static partial Regex SectionNumber();
 
     private sealed class NaturalNumberComparer : IComparer<string>
     {

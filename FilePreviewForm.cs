@@ -70,11 +70,11 @@ internal sealed class FilePreviewForm : Form
             {
                 Dock = DockStyle.Fill,
                 ReadOnly = true,
-                WordWrap = extension is ".docx" or ".pptx",
+                WordWrap = extension is ".docx" or ".hwpx" or ".pptx",
                 DetectUrls = false,
                 BackColor = Color.White,
                 ForeColor = Color.FromArgb(36, 45, 54),
-                Font = new Font(extension is ".docx" or ".xlsx" or ".pptx" ? "Segoe UI" : "Consolas", 10),
+                Font = new Font(extension is ".docx" or ".hwpx" or ".xlsx" or ".pptx" ? "Segoe UI" : "Consolas", 10),
                 Text = await Task.Run(() => PreviewContent.ReadDocumentText(_filePath))
             };
             if (extension == ".rtf") text.LoadFile(_filePath, RichTextBoxStreamType.RichText);

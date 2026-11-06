@@ -282,7 +282,7 @@ public partial class Form1 : Form
         using var dialog = new OpenFileDialog
         {
             Title = "열 압축 파일 선택",
-            Filter = "압축 파일|*.zip;*.7z;*.rar;*.egg;*.alz;*.tar;*.gz;*.bz2;*.xz;*.zst;*.cab;*.arj;*.ace;*.lzh;*.arc;*.iso;*.wim;*.001|미리보기 파일|*.pdf;*.docx;*.xlsx;*.pptx;*.txt;*.md;*.csv;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff;*.mp4;*.mov;*.m4v;*.wmv;*.avi;*.mkv;*.webm;*.mp3;*.wav|모든 파일|*.*",
+            Filter = "압축 파일|*.zip;*.7z;*.rar;*.egg;*.alz;*.tar;*.gz;*.bz2;*.xz;*.zst;*.cab;*.arj;*.ace;*.lzh;*.arc;*.iso;*.wim;*.001|미리보기 파일|*.pdf;*.docx;*.hwpx;*.xlsx;*.pptx;*.txt;*.md;*.csv;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff;*.mp4;*.mov;*.m4v;*.wmv;*.avi;*.mkv;*.webm;*.mp3;*.wav|모든 파일|*.*",
             CheckFileExists = true
         };
         if (dialog.ShowDialog(this) == DialogResult.OK) await OpenInputAsync(dialog.FileName);
