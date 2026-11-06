@@ -16,7 +16,7 @@ public partial class Form1 : Form
         MultiSelect = true,
         HideSelection = false,
         BorderStyle = BorderStyle.None,
-        CheckBoxes = false,
+        CheckBoxes = true,
         OwnerDraw = true,
         BackColor = Color.FromArgb(249, 252, 255)
     };
@@ -105,6 +105,11 @@ public partial class Form1 : Form
             if (e.Button != MouseButtons.Right) return;
             var hit = _items.GetItemAt(e.X, e.Y);
             if (hit is not null && !hit.Selected) { _items.SelectedItems.Clear(); hit.Selected = true; }
+        };
+        _items.ItemChecked += (_, _) =>
+        {
+            if (!_busy && _snapshot is not null && _items.CheckedItems.Count > 0)
+                _status.Text = $"{_items.CheckedItems.Count:N0}개 항목 체크됨 · 압축 풀기 또는 파일 편집 작업에 적용됩니다.";
         };
         _items.SelectedIndexChanged += (_, _) => UpdateSelectionActions();
         _items.Columns.Add("이름", 500);
@@ -232,14 +237,20 @@ public partial class Form1 : Form
             g.FillRectangle(accent, bounds.Left, bounds.Top + 5, 3, Math.Max(8, bounds.Height - 10));
         }
 
-        int left = bounds.Left + (e.ColumnIndex == 0 ? 12 : 10);
-        if (e.ColumnIndex == 0 && _items.SmallImageList is not null && item.ImageIndex >= 0)
+        int left = bounds.Left + 10;
+        if (e.ColumnIndex == 0)
         {
-            var image = _items.SmallImageList.Images[item.ImageIndex];
-            int size = 18;
-            int top = bounds.Top + (bounds.Height - size) / 2;
-            g.DrawImage(image, new Rectangle(bounds.Left + 20, top, size, size));
-            left = bounds.Left + 46;
+            int checkSize = 14;
+            var checkBounds = new Rectangle(bounds.Left + 7, bounds.Top + (bounds.Height - checkSize) / 2, checkSize, checkSize);
+            ControlPaint.DrawCheckBox(g, checkBounds, item.Checked ? ButtonState.Checked : ButtonState.Normal);
+            if (_items.SmallImageList is not null && item.ImageIndex >= 0)
+            {
+                var image = _items.SmallImageList.Images[item.ImageIndex];
+                int size = 18;
+                int top = bounds.Top + (bounds.Height - size) / 2;
+                g.DrawImage(image, new Rectangle(bounds.Left + 29, top, size, size));
+            }
+            left = bounds.Left + 53;
         }
 
         Color textColor = selected ? Color.FromArgb(24, 58, 84) : item.ForeColor.IsEmpty ? Color.FromArgb(38, 65, 87) : item.ForeColor;
@@ -536,9 +547,9 @@ public partial class Form1 : Form
     {
         var snapshot = _snapshot;
         if (snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
-        var selected = _items.SelectedItems.Cast<ListViewItem>().Select(row => (int)row.Tag!).ToHashSet();
-        if (selected.Count == 0) { MessageBox.Show(this, "삭제할 항목을 선택하세요."); return; }
-        if (MessageBox.Show(this, $"선택한 {selected.Count:N0}개 항목을 압축 내용에서 삭제할까요? 원본 압축 파일은 ‘변경 내용 재압축’을 할 때까지 바뀌지 않습니다.", "압축 내용 편집", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        var selected = GetCheckedIndices().ToHashSet();
+        if (selected.Count == 0) { MessageBox.Show(this, "삭제할 항목의 체크 칸을 선택하세요."); return; }
+        if (MessageBox.Show(this, $"체크한 {selected.Count:N0}개 항목을 압축 내용에서 삭제할까요? 원본 압축 파일은 ‘변경 내용 재압축’을 할 때까지 바뀌지 않습니다.", "압축 내용 편집", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         try
         {
             await EnsureEditWorkspaceAsync();
@@ -552,7 +563,7 @@ public partial class Form1 : Form
                 else if (File.Exists(path)) File.Delete(path);
             }
             _editChanges = true;
-            _status.Text = $"선택한 {selected.Count:N0}개 항목을 제거했습니다. ‘파일 편집’에서 변경 내용을 재압축하세요.";
+            _status.Text = $"체크한 {selected.Count:N0}개 항목을 제거했습니다. ‘파일 편집’에서 변경 내용을 재압축하세요.";
         }
         catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "항목 삭제 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
@@ -634,8 +645,9 @@ public partial class Form1 : Form
     {
         var snapshot = _snapshot;
         if (snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
-        var indices = _items.SelectedItems.Cast<ListViewItem>().Select(row => (int)row.Tag!).ToList();
-        if (indices.Count == 0) indices = snapshot.Items.Select(i => i.Index).ToList();
+        var indices = GetCheckedIndices();
+        bool extractAll = indices.Count == 0;
+        if (extractAll) indices = snapshot.Items.Select(i => i.Index).ToList();
         string archiveFolder = Path.GetDirectoryName(snapshot.Path) ?? Environment.CurrentDirectory;
         string destination = mode switch
         {
@@ -671,7 +683,9 @@ public partial class Form1 : Form
         await RunOperationAsync("압축 해제 중…", async (progress, token) =>
         {
             int count = await ArchiveEngineService.ExtractAsync(snapshot, indices, destination, _password.Text, progress, token);
-            return $"{count:N0}개 항목을 풀었습니다: {destination}";
+            return extractAll
+                ? $"전체 항목 {count:N0}개를 풀었습니다: {destination}"
+                : $"체크한 항목 {count:N0}개를 풀었습니다: {destination}";
         });
     }
 
@@ -768,6 +782,10 @@ public partial class Form1 : Form
         }
         _items.EndUpdate();
     }
+
+    private List<int> GetCheckedIndices() => _items.CheckedItems.Cast<ListViewItem>()
+        .Select(row => (int)row.Tag!)
+        .ToList();
 
     private static string? ChooseFolder(string description, string? initialPath = null)
     {
