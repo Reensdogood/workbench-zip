@@ -37,7 +37,7 @@ dotnet publish .\myzip.csproj -c Release -r win-x64 --self-contained true
 
 The self-contained build emits a single `myzip.exe`. To enable optional ALZ/EGG support for personal use, obtain the official module and build with `-p:IncludeUnEggModule=true`; the module must be placed at `vendor/estsoft/UnEGG64.dll` and is copied separately next to `myzip.exe`. Without that module, other supported archive formats remain available.
 
-To create the Windows setup program, publish the public build to `publish-public` and compile [`installer/myzip.iss`](installer/myzip.iss) with Inno Setup 7. The installer defaults to `{autopf}\myzip` (on x64 Windows, `C:\Program Files\myzip`) and creates a Start menu shortcut. A desktop shortcut is optional.
+To create the Windows setup program, publish the public build to `publish-public` and compile [`installer/myzip.iss`](installer/myzip.iss) with Inno Setup 7. The installer defaults to `{autopf}\myzip` (on x64 Windows, `C:\Program Files\myzip`) and creates a Start menu shortcut. A desktop shortcut is optional. During an interactive install, the user can register all supported archive formats, choose ZIP/7Z/RAR/TAR individually, or skip file associations. The installer opens Windows Default Apps for the user to confirm the selected defaults; Windows does not permit the installer to silently take over protected file associations. Silent updates leave existing file-association choices alone.
 
 The Explorer commands are registered for one selected item at a time. On Windows 11 they may be listed under **Show more options** because the installer uses built-in registry verbs instead of an in-process Explorer extension.
 

@@ -239,7 +239,7 @@ public partial class Form1 : Form
         root.Controls.Add(headingShell, 0, 0);
 
         var actionsShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Blue, Padding = new Padding(8, 7, 8, 9), Margin = new Padding(0, 2, 0, 8) };
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), BackColor = Color.Transparent, Padding = new Padding(0), AutoScroll = true };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), BackColor = Color.FromArgb(231, 243, 250), Padding = new Padding(0), AutoScroll = true };
         actions.Controls.AddRange([_openButton, _extractButton, _previewFileButton, _testButton, Separator(), _createButton, _editButton]);
         actionsShell.Controls.Add(actions);
         root.Controls.Add(actionsShell, 0, 1);

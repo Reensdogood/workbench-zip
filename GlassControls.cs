@@ -83,19 +83,20 @@ internal sealed class GlassActionButton : Button
 
     public GlassActionButton()
     {
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw, true);
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
         FlatStyle = FlatStyle.Flat;
         FlatAppearance.BorderSize = 0;
         UseVisualStyleBackColor = false;
-        BackColor = Color.Transparent;
+        BackColor = Color.FromArgb(231, 243, 250);
         Cursor = Cursors.Hand;
         TabStop = true;
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
     {
-        if (Parent is not null) InvokePaintBackground(Parent, e);
-        else e.Graphics.Clear(Color.FromArgb(235, 244, 250));
+        // Paint an opaque toolbar-matching surface. Transparent child painting in
+        // WinForms can expose the uninitialized window surface as black corners.
+        e.Graphics.Clear(BackColor);
     }
 
     protected override void OnPaint(PaintEventArgs e)
