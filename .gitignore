@@ -1,0 +1,12 @@
+**/bin/
+**/obj/
+/publish/
+/publish-*/
+/analysis/
+/vendor/
+/licenses/estsoft/
+/.vs/
+*.user
+*.suo
+*.pdb
+*.zip
