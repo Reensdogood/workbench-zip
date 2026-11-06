@@ -25,9 +25,10 @@ public partial class Form1 : Form
     private readonly TextBox _password = new() { Width = 180, UseSystemPasswordChar = true, PlaceholderText = "암호(필요한 경우)", BackColor = Color.FromArgb(251, 253, 255), ForeColor = Color.FromArgb(24, 53, 78), BorderStyle = BorderStyle.FixedSingle };
     private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(49, 82, 107), BackColor = Color.Transparent, Margin = new Padding(4, 5, 12, 0), ImageAlign = ContentAlignment.MiddleLeft, TextImageRelation = TextImageRelation.ImageBeforeText };
     private readonly ComboBox _compressionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(251, 253, 255), ForeColor = Color.FromArgb(24, 53, 78) };
-    private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(47, 83, 108), BackColor = Color.Transparent };
-    private readonly LinkLabel _updateLink = new() { Text = "업데이트 확인", AutoSize = true, LinkColor = Color.FromArgb(20, 119, 180), ActiveLinkColor = Color.FromArgb(12, 88, 140), VisitedLinkColor = Color.FromArgb(20, 119, 180), BackColor = Color.Transparent, Margin = new Padding(4, 7, 5, 0) };
-    private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(8, 6, 10, 0) };
+    private readonly Label _statusMark = new() { Text = "●", Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleCenter, Font = new Font("Segoe UI", 9.5f, FontStyle.Bold), ForeColor = Color.FromArgb(36, 145, 185), BackColor = Color.Transparent, Margin = new Padding(0, 0, 4, 0) };
+    private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(38, 72, 96), BackColor = Color.Transparent, Margin = new Padding(0) };
+    private readonly LinkLabel _updateLink = new() { Text = "업데이트 확인", AutoSize = true, Font = new Font("Segoe UI", 9f, FontStyle.Bold), LinkColor = Color.FromArgb(20, 119, 180), ActiveLinkColor = Color.FromArgb(12, 88, 140), VisitedLinkColor = Color.FromArgb(20, 119, 180), BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0) };
+    private readonly Label _progressText = new() { AutoSize = true, Font = new Font("Segoe UI", 8.75f), TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(4, 0, 8, 0) };
     private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
     private readonly GlassActionButton _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly GlassActionButton _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
@@ -265,25 +266,42 @@ public partial class Form1 : Form
         listShell.Controls.Add(_items);
         root.Controls.Add(listShell, 0, 3);
 
-        var footerShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(12, 4, 12, 6), Margin = new Padding(0, 0, 0, 1) };
+        var footerShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(14, 5, 14, 7), Margin = new Padding(0, 0, 0, 1) };
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), BackColor = Color.Transparent };
-        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
+        footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 32));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0), BackColor = Color.Transparent };
+        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 5, RowCount = 1, Margin = new Padding(0), BackColor = Color.Transparent };
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 20));
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
-        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 122));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 132));
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
-        statusRow.Controls.Add(_status, 0, 0);
-        statusRow.Controls.Add(_updateLink, 1, 0);
-        statusRow.Controls.Add(_progressText, 2, 0);
-        statusRow.Controls.Add(_cancelButton, 3, 0);
+        statusRow.Controls.Add(_statusMark, 0, 0);
+        statusRow.Controls.Add(_status, 1, 0);
+        statusRow.Controls.Add(_updateLink, 2, 0);
+        statusRow.Controls.Add(_progressText, 3, 0);
+        statusRow.Controls.Add(_cancelButton, 4, 0);
         _status.Text = "준비됨 · 창에 압축 파일을 끌어다 놓아도 열 수 있습니다.";
+        _status.TextChanged += (_, _) => UpdateStatusMark();
         footer.Controls.Add(statusRow, 0, 0);
         footer.Controls.Add(_progress, 0, 1);
         footerShell.Controls.Add(footer);
         root.Controls.Add(footerShell, 0, 4);
         FormClosed += (_, _) => CleanupEditWorkspace();
+    }
+
+    private void UpdateStatusMark()
+    {
+        string text = _status.Text;
+        _statusMark.ForeColor = text.Contains("실패", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("오류", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("못했습니다", StringComparison.OrdinalIgnoreCase)
+                ? Color.FromArgb(210, 82, 77)
+                : text.Contains("취소", StringComparison.OrdinalIgnoreCase)
+                    ? Color.FromArgb(205, 141, 46)
+                    : _busy
+                        ? Color.FromArgb(27, 133, 190)
+                        : Color.FromArgb(40, 155, 119);
     }
 
     private void DrawGlassColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
@@ -893,6 +911,7 @@ public partial class Form1 : Form
     private void SetBusy(bool busy, string? status = null)
     {
         _busy = busy;
+        UpdateStatusMark();
         _openButton.Enabled = !busy;
         _extractButton.Enabled = !busy && _snapshot is not null;
         _previewFileButton.Enabled = !busy && CanPreviewSelection();
