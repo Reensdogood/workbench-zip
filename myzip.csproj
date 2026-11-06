@@ -9,6 +9,7 @@
     <Version>1.0.0</Version>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
+    <UseWPF>true</UseWPF>
     <ImplicitUsings>enable</ImplicitUsings>
     <PlatformTarget>x64</PlatformTarget>
     <PublishSingleFile>true</PublishSingleFile>
@@ -19,6 +20,7 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <PackageReference Include="Microsoft.Web.WebView2" Version="1.0.4314.35" />
     <PackageReference Include="SharpCompress" Version="0.50.8" />
   </ItemGroup>
 
@@ -29,9 +31,19 @@
     <Content Include="vendor\estsoft\unegg-source.tar.bz2" Condition="'$(IncludeUnEggModule)' == 'true' and Exists('vendor\estsoft\unegg-source.tar.bz2')" Link="docs\licenses\estsoft\unegg-source.tar.bz2" TargetPath="docs\licenses\estsoft\unegg-source.tar.bz2" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="vendor\estsoft\EGG-Specification.zip" Condition="'$(IncludeUnEggModule)' == 'true' and Exists('vendor\estsoft\EGG-Specification.zip')" Link="docs\licenses\estsoft\EGG-Specification.zip" TargetPath="docs\licenses\estsoft\EGG-Specification.zip" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="licenses\SharpCompress-MIT-LICENSE.txt" Link="docs\licenses\SharpCompress-MIT-LICENSE.txt" TargetPath="docs\licenses\SharpCompress-MIT-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4314.35\LICENSE.txt" Link="docs\licenses\Microsoft-WebView2-LICENSE.txt" TargetPath="docs\licenses\Microsoft-WebView2-LICENSE.txt" CopyToPublishDirectory="PreserveNewest" />
+    <Content Include="$(NuGetPackageRoot)microsoft.web.webview2\1.0.4314.35\NOTICE.txt" Link="docs\licenses\Microsoft-WebView2-NOTICE.txt" TargetPath="docs\licenses\Microsoft-WebView2-NOTICE.txt" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="licenses\estsoft\USAGE-KO.txt" Condition="'$(IncludeUnEggModule)' == 'true' and Exists('licenses\estsoft\USAGE-KO.txt')" Link="docs\licenses\estsoft\USAGE-KO.txt" TargetPath="docs\licenses\estsoft\USAGE-KO.txt" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="README.md" Link="docs\README.txt" TargetPath="docs\README.txt" CopyToPublishDirectory="PreserveNewest" />
     <Content Include="LICENSE" Link="docs\LICENSE-MIT.txt" TargetPath="docs\LICENSE-MIT.txt" CopyToPublishDirectory="PreserveNewest" />
   </ItemGroup>
+
+  <Target Name="MoveWebView2ReferenceDocs" AfterTargets="Publish">
+    <ItemGroup>
+      <_WebView2Reference Include="$(PublishDir)Microsoft.Web.WebView2.*.xml" />
+    </ItemGroup>
+    <MakeDir Directories="$(PublishDir)docs\reference" Condition="'@(_WebView2Reference)' != ''" />
+    <Move SourceFiles="@(_WebView2Reference)" DestinationFolder="$(PublishDir)docs\reference" Condition="'@(_WebView2Reference)' != ''" />
+  </Target>
 
 </Project>

@@ -12,7 +12,8 @@ internal enum MenuIcon
     Eye,
     Settings,
     File,
-    Folder
+    Folder,
+    Preview
 }
 
 internal static class MenuIconFactory
@@ -99,6 +100,13 @@ internal static class MenuIconFactory
                 break;
             case MenuIcon.Folder:
                 g.DrawLines(pen, [new PointF(3, 6), new PointF(3, 4), new PointF(10, 4), new PointF(12, 7), new PointF(21, 7), new PointF(21, 19), new PointF(3, 19), new PointF(3, 6)]);
+                break;
+            case MenuIcon.Preview:
+                g.DrawRectangle(pen, 3, 3, 13, 17);
+                g.DrawLine(pen, 6, 8, 13, 8);
+                g.DrawLine(pen, 6, 11, 11, 11);
+                g.DrawEllipse(pen, 12, 12, 8, 8);
+                g.DrawLine(pen, 18, 18, 22, 22);
                 break;
         }
 

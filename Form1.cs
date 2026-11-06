@@ -1,3 +1,4 @@
+using System.IO;
 using SharpCompress.Common;
 
 namespace MyZip;
@@ -25,6 +26,7 @@ public partial class Form1 : Form
     private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Style = ProgressBarStyle.Continuous };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly Button _extractButton = ActionButton("선택 항목 풀기", MenuIcon.Extract);
+    private readonly Button _previewButton = ActionButton("미리보기", MenuIcon.Preview);
     private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
     private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
     private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
@@ -34,10 +36,12 @@ public partial class Form1 : Form
     private CancellationTokenSource? _operation;
     private bool _busy;
 
-    public Form1()
+    public Form1(string[]? startupArgs = null)
     {
         InitializeComponent();
         BuildUi();
+        if (startupArgs?.FirstOrDefault() is { Length: > 0 } startupPath)
+            Shown += async (_, _) => await OpenInputAsync(startupPath);
     }
 
     private void BuildUi()
@@ -55,17 +59,24 @@ public partial class Form1 : Form
         _showPassword.CheckedChanged += (_, _) => _password.UseSystemPasswordChar = !_showPassword.Checked;
         _openButton.Click += async (_, _) => await OpenDialogAsync();
         _extractButton.Click += async (_, _) => await ExtractSelectedAsync();
+        _previewButton.Click += async (_, _) => await PreviewSelectedAsync();
         _createFilesButton.Click += async (_, _) => await CreateFromFilesDialogAsync();
         _createFolderButton.Click += async (_, _) => await CreateFromFolderDialogAsync();
         _testButton.Click += async (_, _) => await TestArchiveAsync();
         _cancelButton.Click += (_, _) => _operation?.Cancel();
         _cancelButton.Enabled = false;
-        _items.DoubleClick += async (_, _) => await ExtractSelectedAsync();
+        _items.DoubleClick += async (_, _) =>
+        {
+            if (CanPreviewSelection()) await PreviewSelectedAsync();
+            else await ExtractSelectedAsync();
+        };
+        _items.SelectedIndexChanged += (_, _) => _previewButton.Enabled = !_busy && CanPreviewSelection();
         _items.Columns.Add("이름", 500);
         _items.Columns.Add("크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("형식", 90);
         _items.Columns.Add("수정한 날짜", 165);
+        _previewButton.Enabled = false;
         _items.SmallImageList = _itemIcons;
         _itemIcons.Images.Add("file", MenuIconFactory.Create(MenuIcon.File, Color.FromArgb(47, 105, 154), 18));
         _itemIcons.Images.Add("folder", MenuIconFactory.Create(MenuIcon.Folder, Color.FromArgb(209, 148, 38), 18));
@@ -89,7 +100,7 @@ public partial class Form1 : Form
         root.Controls.Add(heading, 0, 0);
 
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 10), BackColor = Color.FromArgb(240, 246, 250), Padding = new Padding(8, 7, 8, 7), AutoScroll = true };
-        actions.Controls.AddRange([_openButton, _extractButton, _testButton, Separator(), _createFilesButton, _createFolderButton]);
+        actions.Controls.AddRange([_openButton, _extractButton, _previewButton, _testButton, Separator(), _createFilesButton, _createFolderButton]);
         root.Controls.Add(actions, 0, 1);
 
         var options = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0, 5, 0, 0) };
@@ -132,10 +143,88 @@ public partial class Form1 : Form
         using var dialog = new OpenFileDialog
         {
             Title = "열 압축 파일 선택",
-            Filter = "압축 파일|*.zip;*.7z;*.rar;*.egg;*.alz;*.tar;*.gz;*.bz2;*.xz;*.zst;*.cab;*.arj;*.ace;*.lzh;*.arc;*.iso;*.wim;*.001|모든 파일|*.*",
+            Filter = "압축 파일|*.zip;*.7z;*.rar;*.egg;*.alz;*.tar;*.gz;*.bz2;*.xz;*.zst;*.cab;*.arj;*.ace;*.lzh;*.arc;*.iso;*.wim;*.001|미리보기 파일|*.pdf;*.docx;*.xlsx;*.pptx;*.txt;*.md;*.csv;*.png;*.jpg;*.jpeg;*.bmp;*.gif;*.tif;*.tiff;*.mp4;*.mov;*.m4v;*.wmv;*.avi;*.mkv;*.webm;*.mp3;*.wav|모든 파일|*.*",
             CheckFileExists = true
         };
-        if (dialog.ShowDialog(this) == DialogResult.OK) await OpenArchiveAsync(dialog.FileName);
+        if (dialog.ShowDialog(this) == DialogResult.OK) await OpenInputAsync(dialog.FileName);
+    }
+
+    private async Task OpenInputAsync(string path)
+    {
+        if (!File.Exists(path))
+        {
+            MessageBox.Show(this, $"전달받은 파일을 찾을 수 없습니다.\r\n{path}", "파일 열기", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        if (IsArchivePath(path)) { await OpenArchiveAsync(path); return; }
+        if (PreviewContent.CanPreview(path)) { ShowStandalonePreview(path); return; }
+        MessageBox.Show(this, "지원하는 압축 파일이나 미리보기 가능한 문서·사진·영상 파일을 선택하세요.", "지원하지 않는 파일", MessageBoxButtons.OK, MessageBoxIcon.Information);
+    }
+
+    private static bool IsArchivePath(string path) => Path.GetExtension(path).ToLowerInvariant() is
+        ".zip" or ".7z" or ".rar" or ".egg" or ".alz" or ".tar" or ".gz" or ".bz2" or ".xz" or ".zst" or ".cab" or ".arj" or ".ace" or ".lzh" or ".arc" or ".iso" or ".wim" or ".001";
+
+    private bool CanPreviewSelection()
+    {
+        if (_snapshot is null || _items.SelectedIndices.Count != 1) return false;
+        var item = _snapshot.Items[_items.SelectedIndices[0]];
+        return !item.IsDirectory && PreviewContent.CanPreview(item.Name);
+    }
+
+    private async Task PreviewSelectedAsync()
+    {
+        if (_snapshot is null || _items.SelectedIndices.Count != 1)
+        {
+            MessageBox.Show(this, "미리볼 파일 하나를 선택하세요.", "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        var item = _snapshot.Items[_items.SelectedIndices[0]];
+        if (item.IsDirectory || !PreviewContent.CanPreview(item.Name))
+        {
+            MessageBox.Show(this, "이 항목은 미리보기를 지원하지 않습니다.", "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            return;
+        }
+        try { PreviewContent.EnsurePreviewSize(item.Size); }
+        catch (Exception ex) { MessageBox.Show(this, ex.Message, "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+
+        string tempFolder = Path.Combine(Path.GetTempPath(), "myzip-preview", Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tempFolder);
+        _operation = new CancellationTokenSource();
+        var progress = new Progress<(int Done, int Total)>(value =>
+        {
+            _progress.Value = value.Total <= 0 ? 0 : (int)Math.Clamp(value.Done * 1000d / value.Total, 0, 1000);
+            _progressText.Text = value.Total <= 0 ? string.Empty : $"{value.Done:N0} / {value.Total:N0}";
+        });
+        SetBusy(true, "미리보기 파일을 준비하는 중…");
+        bool previewOwnsTemp = false;
+        try
+        {
+            await ArchiveEngineService.ExtractAsync(_snapshot, [item.Index], tempFolder, _password.Text, progress, _operation.Token);
+            string extractedPath = ArchiveEngineService.ResolveSafePath(tempFolder, item.Name);
+            var preview = new FilePreviewForm(extractedPath, item.Name, tempFolder);
+            previewOwnsTemp = true;
+            preview.ShowDialog(this);
+        }
+        catch (OperationCanceledException) { _status.Text = "미리보기를 취소했습니다."; }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "미리보기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally
+        {
+            if (!previewOwnsTemp) try { Directory.Delete(tempFolder, recursive: true); } catch { }
+            _operation.Dispose();
+            _operation = null;
+            SetBusy(false);
+        }
+    }
+
+    private void ShowStandalonePreview(string path)
+    {
+        try
+        {
+            PreviewContent.EnsurePreviewSize(new FileInfo(path).Length);
+            using var preview = new FilePreviewForm(path, Path.GetFileName(path));
+            preview.ShowDialog(this);
+        }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "미리보기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
     }
 
     private async Task OpenArchiveAsync(string path)
@@ -285,6 +374,7 @@ public partial class Form1 : Form
         _busy = busy;
         _openButton.Enabled = !busy;
         _extractButton.Enabled = !busy && _snapshot is not null;
+        _previewButton.Enabled = !busy && CanPreviewSelection();
         _testButton.Enabled = !busy && _snapshot is not null;
         _createFilesButton.Enabled = !busy;
         _createFolderButton.Enabled = !busy;
@@ -303,7 +393,7 @@ public partial class Form1 : Form
 
     private async void OnDragDrop(object? sender, DragEventArgs e)
     {
-        if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) await OpenArchiveAsync(files[0]);
+        if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) await OpenInputAsync(files[0]);
     }
 
     private static Button ActionButton(string label, MenuIcon icon, bool primary = false)
