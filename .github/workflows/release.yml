@@ -1,0 +1,73 @@
+name: Build and publish myzip release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out source
+        uses: actions/checkout@v4
+
+      - name: Set up .NET 8
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Validate release version
+        shell: pwsh
+        run: |
+          $version = (Select-Xml -Path .\myzip.csproj -XPath '/Project/PropertyGroup/Version').Node.InnerText
+          $tagVersion = $env:GITHUB_REF_NAME.TrimStart('v', 'V')
+          $scriptVersion = (Select-String -Path .\installer\myzip.iss -Pattern '^#define MyAppVersion "([^"]+)"$').Matches.Groups[1].Value
+          if ($version -ne $tagVersion -or $version -ne $scriptVersion) {
+            throw "Version mismatch: csproj=$version, tag=$tagVersion, installer=$scriptVersion"
+          }
+
+      - name: Publish public self-contained build
+        run: dotnet publish .\myzip.csproj -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeUnEggModule=false -o .\publish-public
+
+      - name: Install official Inno Setup compiler
+        shell: pwsh
+        run: |
+          $download = Join-Path $env:RUNNER_TEMP 'innosetup-7.1.1-x64.exe'
+          Invoke-WebRequest 'https://github.com/jrsoftware/issrc/releases/download/is-7_1_1/innosetup-7.1.1-x64.exe' -OutFile $download
+          $signature = Get-AuthenticodeSignature -FilePath $download
+          if ($signature.Status -ne 'Valid' -or $signature.SignerCertificate.Subject -notlike '*Pyrsys B.V.*') {
+            throw 'Inno Setup installer signature validation failed.'
+          }
+          $process = Start-Process -FilePath $download -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/SP-' -Wait -PassThru
+          if ($process.ExitCode -ne 0) { throw "Inno Setup installation failed with exit code $($process.ExitCode)." }
+
+      - name: Build installer and portable archive
+        shell: pwsh
+        run: |
+          $iscc = 'C:\Program Files\Inno Setup 7\ISCC.exe'
+          if (-not (Test-Path $iscc)) { throw 'ISCC.exe was not installed.' }
+          & $iscc /Qp .\installer\myzip.iss
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed with exit code $LASTEXITCODE." }
+          $release = Join-Path $env:GITHUB_WORKSPACE 'release'
+          New-Item -ItemType Directory -Force -Path $release | Out-Null
+          Copy-Item (Join-Path (Split-Path $env:GITHUB_WORKSPACE -Parent) 'myzip-setup-win-x64.exe') $release
+          Compress-Archive -Path .\publish-public\* -DestinationPath (Join-Path $release 'myzip-windows-x64.zip') -CompressionLevel Optimal -Force
+          $installer = Join-Path $release 'myzip-setup-win-x64.exe'
+          $hash = (Get-FileHash -Algorithm SHA256 $installer).Hash.ToLowerInvariant()
+          Set-Content -NoNewline -Encoding ascii -Path "$installer.sha256" -Value $hash
+
+      - name: Create GitHub Release and upload update assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          gh release create $env:GITHUB_REF_NAME `
+            .\release\myzip-setup-win-x64.exe `
+            .\release\myzip-setup-win-x64.exe.sha256 `
+            .\release\myzip-windows-x64.zip `
+            --title "myzip $($env:GITHUB_REF_NAME)" `
+            --generate-notes

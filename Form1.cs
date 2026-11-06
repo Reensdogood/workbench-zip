@@ -26,6 +26,7 @@ public partial class Form1 : Form
     private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(49, 82, 107), BackColor = Color.Transparent, Margin = new Padding(4, 5, 12, 0), ImageAlign = ContentAlignment.MiddleLeft, TextImageRelation = TextImageRelation.ImageBeforeText };
     private readonly ComboBox _compressionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(251, 253, 255), ForeColor = Color.FromArgb(24, 53, 78) };
     private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(47, 83, 108), BackColor = Color.Transparent };
+    private readonly LinkLabel _updateLink = new() { Text = "업데이트 확인", AutoSize = true, LinkColor = Color.FromArgb(20, 119, 180), ActiveLinkColor = Color.FromArgb(12, 88, 140), VisitedLinkColor = Color.FromArgb(20, 119, 180), BackColor = Color.Transparent, Margin = new Padding(4, 7, 5, 0) };
     private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(8, 6, 10, 0) };
     private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
@@ -50,15 +51,19 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         BuildUi();
-        if (startupArgs is { Length: > 0 })
+        Shown += async (_, _) =>
         {
-            if (startupArgs[0].Equals("--compress", StringComparison.OrdinalIgnoreCase))
-                Shown += async (_, _) => await RunShellCompressAsync(startupArgs.Skip(1).ToArray());
-            else if (startupArgs[0].Equals("--extract", StringComparison.OrdinalIgnoreCase))
-                Shown += async (_, _) => await RunShellExtractAsync(startupArgs.Skip(1).FirstOrDefault());
-            else
-                Shown += async (_, _) => await OpenInputAsync(startupArgs[0]);
-        }
+            if (startupArgs is { Length: > 0 })
+            {
+                if (startupArgs[0].Equals("--compress", StringComparison.OrdinalIgnoreCase))
+                    await RunShellCompressAsync(startupArgs.Skip(1).ToArray());
+                else if (startupArgs[0].Equals("--extract", StringComparison.OrdinalIgnoreCase))
+                    await RunShellExtractAsync(startupArgs.Skip(1).FirstOrDefault());
+                else
+                    await OpenInputAsync(startupArgs[0]);
+            }
+            await CheckForUpdatesAsync(manual: false);
+        };
     }
 
     private async Task RunShellCompressAsync(IReadOnlyList<string> paths)
@@ -82,6 +87,63 @@ public partial class Form1 : Form
         await OpenArchiveAsync(path);
         if (_snapshot is not null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(_snapshot.Path), StringComparison.OrdinalIgnoreCase))
             await ExtractSelectedAsync(ExtractMode.AutoFolder);
+    }
+
+    private async Task CheckForUpdatesAsync(bool manual)
+    {
+        string checkFile = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "myzip", "last-update-check.txt");
+        if (!manual && File.Exists(checkFile) && DateTimeOffset.TryParse(File.ReadAllText(checkFile), out var lastCheck) && DateTimeOffset.Now - lastCheck < TimeSpan.FromHours(24)) return;
+
+        using var checkTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(15));
+        try
+        {
+            _updateLink.Enabled = false;
+            _updateLink.Text = "업데이트 확인 중…";
+            Version current = typeof(Form1).Assembly.GetName().Version ?? new Version(1, 0, 0);
+            var update = await GitHubUpdateService.CheckAsync(current, checkTimeout.Token);
+            Directory.CreateDirectory(Path.GetDirectoryName(checkFile)!);
+            File.WriteAllText(checkFile, DateTimeOffset.Now.ToString("O"));
+            if (update is null)
+            {
+                if (manual) MessageBox.Show(this, $"현재 최신 버전입니다. (v{current})", "myzip 업데이트", MessageBoxButtons.OK, MessageBoxIcon.Information);
+                return;
+            }
+
+            string notes = update.Notes.Trim();
+            if (notes.Length > 900) notes = notes[..900] + "…";
+            string message = $"새 버전 v{update.Version}을 사용할 수 있습니다. 현재 버전은 v{current}입니다.\r\n\r\n{(string.IsNullOrWhiteSpace(notes) ? "GitHub Release에서 변경 사항을 확인할 수 있습니다." : notes)}\r\n\r\nGitHub에서 설치 파일을 받아 지금 업데이트할까요?";
+            if (MessageBox.Show(this, message, "myzip 업데이트", MessageBoxButtons.YesNo, MessageBoxIcon.Information) != DialogResult.Yes) return;
+
+            _updateLink.Text = "업데이트 다운로드 중…";
+            _status.Text = "GitHub에서 업데이트를 다운로드하고 무결성을 확인하는 중…";
+            using var downloadTimeout = new CancellationTokenSource(TimeSpan.FromMinutes(5));
+            string setupPath = await GitHubUpdateService.DownloadAndVerifyInstallerAsync(update, downloadTimeout.Token);
+            string installDirectory = Path.GetFullPath(AppContext.BaseDirectory).TrimEnd(Path.DirectorySeparatorChar, Path.AltDirectorySeparatorChar);
+            var start = new ProcessStartInfo
+            {
+                FileName = setupPath,
+                Arguments = $"/SILENT /SUPPRESSMSGBOXES /NORESTART /SP- /DIR=\"{installDirectory}\"",
+                UseShellExecute = true,
+                Verb = "runas",
+                WorkingDirectory = Path.GetDirectoryName(setupPath)!
+            };
+            Process.Start(start);
+            _status.Text = "업데이트 설치 프로그램을 시작했습니다. 설치가 끝나면 myzip을 다시 실행하세요.";
+        }
+        catch (System.ComponentModel.Win32Exception ex) when (ex.NativeErrorCode == 1223)
+        {
+            _status.Text = "업데이트를 취소했습니다.";
+        }
+        catch (Exception ex)
+        {
+            if (manual)
+                MessageBox.Show(this, $"GitHub 업데이트를 확인하지 못했습니다.\r\n{ex.GetBaseException().Message}", "myzip 업데이트", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+        }
+        finally
+        {
+            _updateLink.Text = "업데이트 확인";
+            _updateLink.Enabled = true;
+        }
     }
 
     private void BuildUi()
@@ -142,6 +204,7 @@ public partial class Form1 : Form
                 _status.Text = $"{_items.CheckedItems.Count:N0}개 항목 체크됨 · 압축 풀기 또는 파일 편집 작업에 적용됩니다.";
         };
         _items.SelectedIndexChanged += (_, _) => UpdateSelectionActions();
+        _updateLink.LinkClicked += async (_, _) => await CheckForUpdatesAsync(manual: true);
         _items.Columns.Add("이름", 500);
         _items.Columns.Add("크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
@@ -206,13 +269,15 @@ public partial class Form1 : Form
         var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), BackColor = Color.Transparent };
         footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0), BackColor = Color.Transparent };
+        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 4, RowCount = 1, Margin = new Padding(0), BackColor = Color.Transparent };
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
-        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 104));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 150));
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         statusRow.Controls.Add(_status, 0, 0);
-        statusRow.Controls.Add(_progressText, 1, 0);
-        statusRow.Controls.Add(_cancelButton, 2, 0);
+        statusRow.Controls.Add(_updateLink, 1, 0);
+        statusRow.Controls.Add(_progressText, 2, 0);
+        statusRow.Controls.Add(_cancelButton, 3, 0);
         _status.Text = "준비됨 · 창에 압축 파일을 끌어다 놓아도 열 수 있습니다.";
         footer.Controls.Add(statusRow, 0, 0);
         footer.Controls.Add(_progress, 0, 1);

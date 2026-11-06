@@ -37,9 +37,15 @@ dotnet publish .\myzip.csproj -c Release -r win-x64 --self-contained true
 
 The self-contained build emits a single `myzip.exe`. To enable optional ALZ/EGG support for personal use, obtain the official module and build with `-p:IncludeUnEggModule=true`; the module must be placed at `vendor/estsoft/UnEGG64.dll` and is copied separately next to `myzip.exe`. Without that module, other supported archive formats remain available.
 
-To create the Windows setup program, publish the personal build to `publish-personal` and compile [`installer/myzip.iss`](installer/myzip.iss) with Inno Setup 7. The installer defaults to `{autopf}\myzip` (on x64 Windows, `C:\Program Files\myzip`) and creates a Start menu shortcut. A desktop shortcut is optional.
+To create the Windows setup program, publish the public build to `publish-public` and compile [`installer/myzip.iss`](installer/myzip.iss) with Inno Setup 7. The installer defaults to `{autopf}\myzip` (on x64 Windows, `C:\Program Files\myzip`) and creates a Start menu shortcut. A desktop shortcut is optional.
 
 The Explorer commands are registered for one selected item at a time. On Windows 11 they may be listed under **Show more options** because the installer uses built-in registry verbs instead of an in-process Explorer extension.
+
+## GitHub releases and automatic updates
+
+The app checks the latest public GitHub Release once per day at startup. If a newer version is available, myzip shows its release notes and asks before downloading the installer. It verifies the installer against the SHA-256 asset and then starts the setup program for the current install folder; Windows may request administrator approval. The app never installs an unverified file.
+
+To publish a release, set the same version in `myzip.csproj` and `installer/myzip.iss`, commit the change, and push a matching tag such as `v1.0.2`. The workflow in [`.github/workflows/release.yml`](.github/workflows/release.yml) builds the public installer and portable ZIP, generates the checksum, and uploads all three to GitHub Releases. Public releases exclude the proprietary UnEGG module. Existing personal installations retain a separately supplied module when updated; a fresh public install does not include ALZ/EGG support.
 
 When myzip is selected as the `.zip` default app in Windows Settings, Windows passes the double-clicked archive path to the app. myzip reads that argument and opens the archive directly. Double-clicking a file inside an archive extracts it to a private temporary folder and opens it with its Windows default application. Files remain available in `%TEMP%\myzip-open` and folders older than seven days are cleaned up when myzip next opens. EXE/MSI entries require explicit confirmation; EXE packages and their archive contents are staged together, while MSI files are launched through Windows Installer in interactive mode. Installation elevation prompts are handled by Windows. Viewer and codec support depends on the applications installed on the PC.
 

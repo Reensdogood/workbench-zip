@@ -100,7 +100,6 @@ internal sealed class GlassActionButton : Button
 
     protected override void OnPaint(PaintEventArgs e)
     {
-        base.OnPaint(e);
         var g = e.Graphics;
         g.SmoothingMode = SmoothingMode.AntiAlias;
         g.PixelOffsetMode = PixelOffsetMode.HighQuality;
