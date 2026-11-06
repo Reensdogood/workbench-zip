@@ -1,5 +1,6 @@
 using System.IO;
 using System.Diagnostics;
+using System.Runtime.InteropServices;
 using SharpCompress.Common;
 
 namespace MyZip;
@@ -15,23 +16,25 @@ public partial class Form1 : Form
         MultiSelect = true,
         HideSelection = false,
         BorderStyle = BorderStyle.None,
-        CheckBoxes = false
+        CheckBoxes = false,
+        OwnerDraw = true,
+        BackColor = Color.FromArgb(249, 252, 255)
     };
-    private readonly Label _archiveName = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 15, FontStyle.Bold), ForeColor = Color.FromArgb(30, 48, 67), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly Label _archiveInfo = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 9), ForeColor = Color.FromArgb(95, 112, 128), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
-    private readonly TextBox _password = new() { Width = 180, UseSystemPasswordChar = true, PlaceholderText = "암호(필요한 경우)" };
-    private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(75, 91, 106), Margin = new Padding(4, 5, 12, 0), ImageAlign = ContentAlignment.MiddleLeft, TextImageRelation = TextImageRelation.ImageBeforeText };
-    private readonly ComboBox _compressionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
-    private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(78, 95, 111) };
-    private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(8, 6, 10, 0) };
-    private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Style = ProgressBarStyle.Continuous };
+    private readonly Label _archiveName = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 16, FontStyle.Bold), ForeColor = Color.FromArgb(24, 53, 78), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, BackColor = Color.Transparent };
+    private readonly Label _archiveInfo = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(71, 104, 129), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, BackColor = Color.Transparent };
+    private readonly TextBox _password = new() { Width = 180, UseSystemPasswordChar = true, PlaceholderText = "암호(필요한 경우)", BackColor = Color.FromArgb(251, 253, 255), ForeColor = Color.FromArgb(24, 53, 78), BorderStyle = BorderStyle.FixedSingle };
+    private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(49, 82, 107), BackColor = Color.Transparent, Margin = new Padding(4, 5, 12, 0), ImageAlign = ContentAlignment.MiddleLeft, TextImageRelation = TextImageRelation.ImageBeforeText };
+    private readonly ComboBox _compressionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130, FlatStyle = FlatStyle.Flat, BackColor = Color.FromArgb(251, 253, 255), ForeColor = Color.FromArgb(24, 53, 78) };
+    private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(47, 83, 108), BackColor = Color.Transparent };
+    private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(8, 6, 10, 0) };
+    private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly Button _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
-    private readonly Button _previewButton = ActionButton("기본 앱으로 열기", MenuIcon.Preview);
+    private readonly Button _previewButton = ActionButton("기본 앱 열기", MenuIcon.OpenFile);
     private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
     private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
     private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
-    private readonly Button _cancelButton = ActionButton("취소", MenuIcon.Cancel);
+    private readonly GlassActionButton _cancelButton = new() { Text = "취소", Image = MenuIconFactory.Create(MenuIcon.Cancel, Color.FromArgb(42, 87, 118), 16), Compact = true, Size = new Size(68, 27), Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Margin = new Padding(2, 1, 2, 0) };
     private readonly ContextMenuStrip _extractMenu = new();
 
     private ArchiveSnapshot? _snapshot;
@@ -53,8 +56,13 @@ public partial class Form1 : Form
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(880, 610);
         Size = new Size(1120, 740);
-        BackColor = Color.FromArgb(246, 248, 250);
-        Font = new Font("Segoe UI", 9.5f);
+        BackColor = Color.FromArgb(233, 243, 250);
+        Font = new Font("Segoe UI", 9.25f);
+        _extractMenu.Renderer = new ToolStripProfessionalRenderer(new GlassToolStripColorTable());
+        _extractMenu.BackColor = Color.FromArgb(244, 250, 255);
+        _extractMenu.ForeColor = Color.FromArgb(31, 66, 91);
+        _extractMenu.Font = new Font("Segoe UI", 9.25f);
+        _extractMenu.ShowImageMargin = false;
         AllowDrop = true;
         DragEnter += OnDragEnter;
         DragDrop += OnDragDrop;
@@ -75,66 +83,168 @@ public partial class Form1 : Form
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("형식", 90);
         _items.Columns.Add("수정한 날짜", 165);
+        _items.DrawColumnHeader += DrawGlassColumnHeader;
+        _items.DrawItem += DrawGlassItem;
+        _items.DrawSubItem += DrawGlassSubItem;
         _previewButton.Enabled = false;
         _items.SmallImageList = _itemIcons;
         _itemIcons.Images.Add("file", MenuIconFactory.Create(MenuIcon.File, Color.FromArgb(47, 105, 154), 18));
         _itemIcons.Images.Add("folder", MenuIconFactory.Create(MenuIcon.Folder, Color.FromArgb(209, 148, 38), 18));
         _showPassword.Image = MenuIconFactory.Create(MenuIcon.Eye, Color.FromArgb(75, 91, 106), 17);
 
-        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(20), BackColor = BackColor };
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
+        var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(22), BackColor = BackColor };
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 86));
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 104));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 54));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 58));
         root.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 74));
+        root.RowStyles.Add(new RowStyle(SizeType.Absolute, 76));
         Controls.Add(root);
 
-        var heading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        var headingShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(15, 6, 15, 6), Margin = new Padding(0, 0, 0, 5) };
+        var heading = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), BackColor = Color.Transparent };
         heading.RowStyles.Add(new RowStyle(SizeType.Percent, 60));
         heading.RowStyles.Add(new RowStyle(SizeType.Percent, 40));
         _archiveName.Text = "압축 파일을 열거나 새로 만들어 보세요";
         _archiveInfo.Text = "ZIP · 7Z · RAR · TAR 등 열기 · ZIP/7Z 만들기 · ALZ/EGG 해제";
         heading.Controls.Add(_archiveName, 0, 0);
         heading.Controls.Add(_archiveInfo, 0, 1);
-        root.Controls.Add(heading, 0, 0);
+        headingShell.Controls.Add(heading);
+        root.Controls.Add(headingShell, 0, 0);
 
-        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0, 0, 0, 10), BackColor = Color.FromArgb(240, 246, 250), Padding = new Padding(8, 7, 8, 7), AutoScroll = true };
+        var actionsShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Blue, Padding = new Padding(8, 7, 8, 9), Margin = new Padding(0, 2, 0, 8) };
+        var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), BackColor = Color.Transparent, Padding = new Padding(0), AutoScroll = true };
         actions.Controls.AddRange([_openButton, _extractButton, _previewButton, _testButton, Separator(), _createFilesButton, _createFolderButton]);
-        root.Controls.Add(actions, 0, 1);
+        actionsShell.Controls.Add(actions);
+        root.Controls.Add(actionsShell, 0, 1);
 
-        var options = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0, 5, 0, 0) };
+        var optionsShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(11, 6, 11, 7), Margin = new Padding(0, 1, 0, 4) };
+        var options = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0), BackColor = Color.Transparent };
         options.Controls.Add(new PictureBox { Image = MenuIconFactory.Create(MenuIcon.Password, Color.FromArgb(78, 95, 111), 18), Size = new Size(22, 24), SizeMode = PictureBoxSizeMode.CenterImage, Margin = new Padding(0, 4, 2, 0) });
-        options.Controls.Add(new Label { Text = "암호", AutoSize = true, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(0, 8, 8, 0) });
+        options.Controls.Add(new Label { Text = "암호", AutoSize = true, ForeColor = Color.FromArgb(49, 82, 107), BackColor = Color.Transparent, Margin = new Padding(0, 8, 8, 0) });
         options.Controls.Add(_password);
         options.Controls.Add(_showPassword);
-        options.Controls.Add(new PictureBox { Image = MenuIconFactory.Create(MenuIcon.Settings, Color.FromArgb(78, 95, 111), 18), Size = new Size(20, 24), SizeMode = PictureBoxSizeMode.CenterImage, Margin = new Padding(8, 4, 0, 0) });
-        options.Controls.Add(new Label { Text = "새 압축 설정", AutoSize = true, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(0, 8, 8, 0) });
+        options.Controls.Add(new PictureBox { Image = MenuIconFactory.Create(MenuIcon.Settings, Color.FromArgb(62, 112, 145), 18), Size = new Size(20, 24), SizeMode = PictureBoxSizeMode.CenterImage, BackColor = Color.Transparent, Margin = new Padding(8, 4, 0, 0) });
+        options.Controls.Add(new Label { Text = "새 압축 설정", AutoSize = true, ForeColor = Color.FromArgb(49, 82, 107), BackColor = Color.Transparent, Margin = new Padding(0, 8, 8, 0) });
         _compressionProfile.Items.AddRange(["빠르게", "균형", "작은 크기"]);
         _compressionProfile.SelectedIndex = 0;
         options.Controls.Add(_compressionProfile);
-        options.Controls.Add(new Label { Text = "빠르게: 속도 우선 · 균형: 일반 · 작은 크기: 시간이 더 걸림", AutoSize = true, ForeColor = Color.FromArgb(111, 125, 138), Margin = new Padding(12, 8, 0, 0) });
-        root.Controls.Add(options, 0, 2);
+        options.Controls.Add(new Label { Text = "빠르게: 속도 우선 · 균형: 일반 · 작은 크기: 시간이 더 걸림", AutoSize = true, ForeColor = Color.FromArgb(82, 117, 141), BackColor = Color.Transparent, Margin = new Padding(12, 8, 0, 0) });
+        optionsShell.Controls.Add(options);
+        root.Controls.Add(optionsShell, 0, 2);
 
-        var listShell = new Panel { Dock = DockStyle.Fill, BackColor = Color.White, Padding = new Padding(1), Margin = new Padding(0, 4, 0, 8) };
-        _items.BackColor = Color.White;
-        _items.Font = new Font("Segoe UI", 9.5f);
+        var listShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(6), Margin = new Padding(0, 5, 0, 8) };
+        _items.BackColor = Color.FromArgb(250, 253, 255);
+        _items.Font = new Font("Segoe UI", 9.25f);
         listShell.Controls.Add(_items);
         root.Controls.Add(listShell, 0, 3);
 
-        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0) };
+        var footerShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Frost, Padding = new Padding(12, 4, 12, 6), Margin = new Padding(0, 0, 0, 1) };
+        var footer = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 2, Margin = new Padding(0), BackColor = Color.Transparent };
         footer.RowStyles.Add(new RowStyle(SizeType.Absolute, 30));
         footer.RowStyles.Add(new RowStyle(SizeType.Percent, 100));
-        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0) };
+        var statusRow = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 3, RowCount = 1, Margin = new Padding(0), BackColor = Color.Transparent };
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Percent, 100));
         statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 180));
-        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 72));
+        statusRow.ColumnStyles.Add(new ColumnStyle(SizeType.Absolute, 76));
         statusRow.Controls.Add(_status, 0, 0);
         statusRow.Controls.Add(_progressText, 1, 0);
         statusRow.Controls.Add(_cancelButton, 2, 0);
         _status.Text = "준비됨 · 창에 압축 파일을 끌어다 놓아도 열 수 있습니다.";
         footer.Controls.Add(statusRow, 0, 0);
         footer.Controls.Add(_progress, 0, 1);
-        root.Controls.Add(footer, 0, 4);
+        footerShell.Controls.Add(footer);
+        root.Controls.Add(footerShell, 0, 4);
+    }
+
+    private void DrawGlassColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
+    {
+        if (e.Header is null) return;
+        var g = e.Graphics;
+        var bounds = e.Bounds;
+        using var fill = new System.Drawing.Drawing2D.LinearGradientBrush(bounds, Color.FromArgb(238, 247, 253), Color.FromArgb(220, 235, 246), System.Drawing.Drawing2D.LinearGradientMode.Vertical);
+        g.FillRectangle(fill, bounds);
+        using var line = new Pen(Color.FromArgb(176, 198, 216));
+        g.DrawLine(line, bounds.Left, bounds.Bottom - 1, bounds.Right, bounds.Bottom - 1);
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
+        flags |= e.Header.TextAlign switch
+        {
+            HorizontalAlignment.Center => TextFormatFlags.HorizontalCenter,
+            HorizontalAlignment.Right => TextFormatFlags.Right,
+            _ => TextFormatFlags.Left
+        };
+        var textBounds = Rectangle.Inflate(bounds, -10, -1);
+        using var headerFont = new Font("Segoe UI", 9.25f, FontStyle.Bold);
+        TextRenderer.DrawText(g, e.Header.Text, headerFont, textBounds, Color.FromArgb(46, 78, 102), flags);
+    }
+
+    private void DrawGlassItem(object? sender, DrawListViewItemEventArgs e)
+    {
+        if (_items.View != View.Details) e.DrawDefault = true;
+    }
+
+    private void DrawGlassSubItem(object? sender, DrawListViewSubItemEventArgs e)
+    {
+        var item = e.Item;
+        var subItem = e.SubItem;
+        var header = e.Header;
+        if (item is null || subItem is null || header is null) return;
+        var g = e.Graphics;
+        var bounds = e.Bounds;
+        bool selected = item.Selected;
+        Color rowColor = selected
+            ? Color.FromArgb(204, 231, 248)
+            : e.ItemIndex % 2 == 0 ? Color.FromArgb(250, 253, 255) : Color.FromArgb(244, 249, 253);
+        using (var fill = new SolidBrush(rowColor)) g.FillRectangle(fill, bounds);
+
+        if (selected && e.ColumnIndex == 0)
+        {
+            using var accent = new SolidBrush(Color.FromArgb(45, 149, 202));
+            g.FillRectangle(accent, bounds.Left, bounds.Top + 5, 3, Math.Max(8, bounds.Height - 10));
+        }
+
+        int left = bounds.Left + (e.ColumnIndex == 0 ? 12 : 10);
+        if (e.ColumnIndex == 0 && _items.SmallImageList is not null && item.ImageIndex >= 0)
+        {
+            var image = _items.SmallImageList.Images[item.ImageIndex];
+            int size = 18;
+            int top = bounds.Top + (bounds.Height - size) / 2;
+            g.DrawImage(image, new Rectangle(bounds.Left + 20, top, size, size));
+            left = bounds.Left + 46;
+        }
+
+        Color textColor = selected ? Color.FromArgb(24, 58, 84) : item.ForeColor.IsEmpty ? Color.FromArgb(38, 65, 87) : item.ForeColor;
+        var textBounds = Rectangle.FromLTRB(left, bounds.Top + 1, bounds.Right - 9, bounds.Bottom - 1);
+        var flags = TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding;
+        if (header.TextAlign == HorizontalAlignment.Right) flags |= TextFormatFlags.Right;
+        else if (header.TextAlign == HorizontalAlignment.Center) flags |= TextFormatFlags.HorizontalCenter;
+        TextRenderer.DrawText(g, subItem.Text, item.Font, textBounds, textColor, flags);
+
+        if (selected && e.ColumnIndex == _items.Columns.Count - 1 && _items.Focused)
+            ControlPaint.DrawFocusRectangle(g, Rectangle.Inflate(bounds, -3, -3), textColor, rowColor);
+    }
+
+    private void SetGlassCaption()
+    {
+        try
+        {
+            int caption = ColorTranslator.ToWin32(Color.FromArgb(24, 75, 113));
+            int text = ColorTranslator.ToWin32(Color.White);
+            int border = ColorTranslator.ToWin32(Color.FromArgb(111, 180, 215));
+            _ = DwmSetWindowAttribute(Handle, 33, ref caption, sizeof(int));
+            _ = DwmSetWindowAttribute(Handle, 35, ref text, sizeof(int));
+            _ = DwmSetWindowAttribute(Handle, 34, ref border, sizeof(int));
+        }
+        catch (DllNotFoundException) { }
+        catch (EntryPointNotFoundException) { }
+    }
+
+    [DllImport("dwmapi.dll", PreserveSig = true)]
+    private static extern int DwmSetWindowAttribute(nint hwnd, int attribute, ref int value, int valueSize);
+
+    protected override void OnHandleCreated(EventArgs e)
+    {
+        base.OnHandleCreated(e);
+        SetGlassCaption();
     }
 
     private async Task OpenDialogAsync()
@@ -461,31 +571,21 @@ public partial class Form1 : Form
 
     private static Button ActionButton(string label, MenuIcon icon, bool primary = false)
     {
-        var button = new Button
+        var button = new GlassActionButton
         {
             Text = label,
-            Image = MenuIconFactory.Create(icon, primary ? Color.White : Color.FromArgb(29, 119, 178), 34),
-            ImageAlign = ContentAlignment.TopCenter,
-            TextImageRelation = TextImageRelation.ImageAboveText,
-            TextAlign = ContentAlignment.BottomCenter,
-            AutoSize = false,
-            Size = new Size(148, 78),
+            Image = MenuIconFactory.Create(icon, primary ? Color.White : Color.FromArgb(24, 126, 182), 28),
+            Primary = primary,
+            Size = new Size(148, 82),
             Margin = new Padding(4, 0, 4, 0),
-            Padding = new Padding(5, 5, 5, 5),
-            FlatStyle = FlatStyle.Flat,
-            BackColor = primary ? Color.FromArgb(26, 119, 176) : Color.White,
-            ForeColor = primary ? Color.White : Color.FromArgb(39, 58, 76),
-            Font = new Font("Segoe UI", 9.5f, FontStyle.Bold),
-            Cursor = Cursors.Hand
+            ForeColor = primary ? Color.White : Color.FromArgb(31, 66, 91),
+            Font = new Font("Segoe UI", 9.1f, FontStyle.Bold),
+            AccessibleName = label
         };
-        button.FlatAppearance.BorderColor = Color.FromArgb(207, 220, 230);
-        button.FlatAppearance.BorderSize = 1;
-        button.FlatAppearance.MouseOverBackColor = primary ? Color.FromArgb(21, 103, 155) : Color.FromArgb(229, 243, 251);
-        button.FlatAppearance.MouseDownBackColor = primary ? Color.FromArgb(17, 88, 135) : Color.FromArgb(214, 234, 246);
         return button;
     }
 
-    private static Control Separator() => new Panel { Width = 1, Height = 30, BackColor = Color.FromArgb(221, 228, 234), Margin = new Padding(8, 2, 8, 0) };
+    private static Control Separator() => new Panel { Width = 1, Height = 35, BackColor = Color.FromArgb(158, 255, 255, 255), Margin = new Padding(8, 20, 8, 0) };
 
     private static string FormatSize(long bytes)
     {

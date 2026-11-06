@@ -13,7 +13,8 @@ internal enum MenuIcon
     Settings,
     File,
     Folder,
-    Preview
+    Preview,
+    OpenFile
 }
 
 internal static class MenuIconFactory
@@ -107,6 +108,17 @@ internal static class MenuIconFactory
                 g.DrawLine(pen, 6, 11, 11, 11);
                 g.DrawEllipse(pen, 12, 12, 8, 8);
                 g.DrawLine(pen, 18, 18, 22, 22);
+                break;
+            case MenuIcon.OpenFile:
+                g.DrawLines(pen, [new PointF(4, 3), new PointF(13, 3), new PointF(17, 7), new PointF(17, 12)]);
+                g.DrawLines(pen, [new PointF(17, 7), new PointF(13, 7), new PointF(13, 3)]);
+                g.DrawLine(pen, 4, 3, 4, 20);
+                g.DrawLine(pen, 4, 20, 11, 20);
+                g.DrawLine(pen, 6, 10, 11, 10);
+                g.DrawLine(pen, 6, 13, 10, 13);
+                g.DrawLine(pen, 13, 17, 21, 9);
+                g.DrawLine(pen, 16, 9, 21, 9);
+                g.DrawLine(pen, 21, 9, 21, 14);
                 break;
         }
 
