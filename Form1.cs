@@ -30,15 +30,20 @@ public partial class Form1 : Form
     private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly Button _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
-    private readonly Button _previewButton = ActionButton("기본 앱 열기", MenuIcon.OpenFile);
-    private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
-    private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
+    private readonly Button _previewFileButton = ActionButton("미리보기", MenuIcon.Preview);
+    private readonly Button _createButton = ActionButton("압축 만들기 ▾", MenuIcon.CompressFile);
     private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
     private readonly GlassActionButton _cancelButton = new() { Text = "취소", Image = MenuIconFactory.Create(MenuIcon.Cancel, Color.FromArgb(42, 87, 118), 16), Compact = true, Size = new Size(68, 27), Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Margin = new Padding(2, 1, 2, 0) };
     private readonly ContextMenuStrip _extractMenu = new();
+    private readonly Button _editButton = ActionButton("파일 편집 ▾", MenuIcon.Settings);
+    private readonly ContextMenuStrip _editMenu = new();
+    private readonly ContextMenuStrip _createMenu = new();
+    private readonly ContextMenuStrip _itemMenu = new();
 
     private ArchiveSnapshot? _snapshot;
     private CancellationTokenSource? _operation;
+    private string? _editWorkspace;
+    private bool _editChanges;
     private bool _busy;
 
     public Form1(string[]? startupArgs = null)
@@ -63,21 +68,45 @@ public partial class Form1 : Form
         _extractMenu.ForeColor = Color.FromArgb(31, 66, 91);
         _extractMenu.Font = new Font("Segoe UI", 9.25f);
         _extractMenu.ShowImageMargin = false;
+        _editMenu.Renderer = new ToolStripProfessionalRenderer(new GlassToolStripColorTable());
+        _editMenu.BackColor = Color.FromArgb(244, 250, 255);
+        _editMenu.ForeColor = Color.FromArgb(31, 66, 91);
+        _editMenu.Font = new Font("Segoe UI", 9.25f);
+        _editMenu.ShowImageMargin = false;
+        _createMenu.Renderer = new ToolStripProfessionalRenderer(new GlassToolStripColorTable());
+        _createMenu.BackColor = Color.FromArgb(244, 250, 255);
+        _createMenu.ForeColor = Color.FromArgb(31, 66, 91);
+        _createMenu.Font = new Font("Segoe UI", 9.25f);
+        _createMenu.ShowImageMargin = false;
+        _itemMenu.Renderer = new ToolStripProfessionalRenderer(new GlassToolStripColorTable());
+        _itemMenu.BackColor = Color.FromArgb(244, 250, 255);
+        _itemMenu.ForeColor = Color.FromArgb(31, 66, 91);
+        _itemMenu.Font = new Font("Segoe UI", 9.25f);
+        _itemMenu.ShowImageMargin = false;
         AllowDrop = true;
         DragEnter += OnDragEnter;
         DragDrop += OnDragDrop;
         _showPassword.CheckedChanged += (_, _) => _password.UseSystemPasswordChar = !_showPassword.Checked;
         _openButton.Click += async (_, _) => await OpenDialogAsync();
         BuildExtractMenu();
+        BuildEditMenu();
+        BuildCreateMenu();
+        BuildItemMenu();
         _extractButton.Click += (_, _) => _extractMenu.Show(_extractButton, new Point(0, _extractButton.Height));
-        _previewButton.Click += async (_, _) => await OpenSelectedInDefaultAppAsync();
-        _createFilesButton.Click += async (_, _) => await CreateFromFilesDialogAsync();
-        _createFolderButton.Click += async (_, _) => await CreateFromFolderDialogAsync();
+        _editButton.Click += (_, _) => _editMenu.Show(_editButton, new Point(0, _editButton.Height));
+        _createButton.Click += (_, _) => _createMenu.Show(_createButton, new Point(0, _createButton.Height));
+        _previewFileButton.Click += async (_, _) => await PreviewSelectedAsync();
         _testButton.Click += async (_, _) => await TestArchiveAsync();
         _cancelButton.Click += (_, _) => _operation?.Cancel();
         _cancelButton.Enabled = false;
         _items.DoubleClick += async (_, _) => await OpenSelectedInDefaultAppAsync();
-        _items.SelectedIndexChanged += (_, _) => _previewButton.Enabled = !_busy && CanOpenSelection();
+        _items.MouseUp += (_, e) =>
+        {
+            if (e.Button != MouseButtons.Right) return;
+            var hit = _items.GetItemAt(e.X, e.Y);
+            if (hit is not null && !hit.Selected) { _items.SelectedItems.Clear(); hit.Selected = true; }
+        };
+        _items.SelectedIndexChanged += (_, _) => UpdateSelectionActions();
         _items.Columns.Add("이름", 500);
         _items.Columns.Add("크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
@@ -86,7 +115,7 @@ public partial class Form1 : Form
         _items.DrawColumnHeader += DrawGlassColumnHeader;
         _items.DrawItem += DrawGlassItem;
         _items.DrawSubItem += DrawGlassSubItem;
-        _previewButton.Enabled = false;
+        _previewFileButton.Enabled = false;
         _items.SmallImageList = _itemIcons;
         _itemIcons.Images.Add("file", MenuIconFactory.Create(MenuIcon.File, Color.FromArgb(47, 105, 154), 18));
         _itemIcons.Images.Add("folder", MenuIconFactory.Create(MenuIcon.Folder, Color.FromArgb(209, 148, 38), 18));
@@ -113,7 +142,7 @@ public partial class Form1 : Form
 
         var actionsShell = new GlassSurfacePanel { Dock = DockStyle.Fill, Tone = GlassSurfaceTone.Blue, Padding = new Padding(8, 7, 8, 9), Margin = new Padding(0, 2, 0, 8) };
         var actions = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), BackColor = Color.Transparent, Padding = new Padding(0), AutoScroll = true };
-        actions.Controls.AddRange([_openButton, _extractButton, _previewButton, _testButton, Separator(), _createFilesButton, _createFolderButton]);
+        actions.Controls.AddRange([_openButton, _extractButton, _previewFileButton, _testButton, Separator(), _createButton, _editButton]);
         actionsShell.Controls.Add(actions);
         root.Controls.Add(actionsShell, 0, 1);
 
@@ -154,6 +183,7 @@ public partial class Form1 : Form
         footer.Controls.Add(_progress, 0, 1);
         footerShell.Controls.Add(footer);
         root.Controls.Add(footerShell, 0, 4);
+        FormClosed += (_, _) => CleanupEditWorkspace();
     }
 
     private void DrawGlassColumnHeader(object? sender, DrawListViewColumnHeaderEventArgs e)
@@ -280,6 +310,54 @@ public partial class Form1 : Form
         return !item.IsDirectory;
     }
 
+    private bool CanPreviewSelection()
+    {
+        if (!CanOpenSelection() || _snapshot is null) return false;
+        return PreviewContent.CanPreview(_snapshot.Items[_items.SelectedIndices[0]].Name);
+    }
+
+    private void UpdateSelectionActions()
+    {
+        _previewFileButton.Enabled = !_busy && CanPreviewSelection();
+        _editButton.Enabled = !_busy && _snapshot is not null;
+    }
+
+    private async Task PreviewSelectedAsync()
+    {
+        if (!CanPreviewSelection() || _snapshot is null) return;
+        var snapshot = _snapshot;
+        var item = snapshot.Items[_items.SelectedIndices[0]];
+        string tempFolder = CreateOpenTempFolder();
+        _operation = new CancellationTokenSource();
+        var progress = new Progress<(int Done, int Total)>(value =>
+        {
+            _progress.Value = value.Total <= 0 ? 0 : (int)Math.Clamp(value.Done * 1000d / value.Total, 0, 1000);
+            _progressText.Text = value.Total <= 0 ? string.Empty : $"{value.Done:N0} / {value.Total:N0}";
+        });
+        SetBusy(true, "미리보기 파일을 준비하는 중…");
+        bool handedToPreview = false;
+        try
+        {
+            await ArchiveEngineService.ExtractAsync(snapshot, [item.Index], tempFolder, _password.Text, progress, _operation.Token);
+            string path = ArchiveEngineService.ResolveSafePath(tempFolder, item.Name);
+            PreviewContent.EnsurePreviewSize(new FileInfo(path).Length);
+            SetBusy(false, "미리보기 준비 완료");
+            using var preview = new FilePreviewForm(path, item.Name, tempFolder);
+            handedToPreview = true;
+            preview.ShowDialog(this);
+            _status.Text = "미리보기 창을 닫았습니다.";
+        }
+        catch (OperationCanceledException) { _status.Text = "미리보기를 취소했습니다."; }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "미리보기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally
+        {
+            if (!handedToPreview) try { Directory.Delete(tempFolder, recursive: true); } catch { }
+            _operation?.Dispose();
+            _operation = null;
+            SetBusy(false);
+        }
+    }
+
     private async Task OpenSelectedInDefaultAppAsync()
     {
         if (_snapshot is null || _items.SelectedIndices.Count != 1)
@@ -368,10 +446,12 @@ public partial class Form1 : Form
 
     private async Task OpenArchiveAsync(string path)
     {
+        if (_editChanges && MessageBox.Show(this, "저장하지 않은 압축 내용 변경이 있습니다. 버리고 새 압축 파일을 열까요?", "변경 내용 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         try
         {
             SetBusy(true, "압축 파일을 읽는 중…");
             var snapshot = await Task.Run(() => ArchiveEngineService.Open(path, _password.Text));
+            CleanupEditWorkspace();
             _snapshot = snapshot;
             PopulateItems(snapshot);
             _archiveName.Text = Path.GetFileName(path);
@@ -393,6 +473,161 @@ public partial class Form1 : Form
         _extractMenu.Items.Add("알아서 풀기 · 압축파일 이름 폴더").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.AutoFolder);
         _extractMenu.Items.Add("현재 폴더에 바로 풀기").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.SameFolder);
         _extractMenu.Items.Add("폴더 선택해서 풀기…").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.ChooseFolder);
+    }
+
+    private void BuildEditMenu()
+    {
+        _editMenu.Items.Add("선택 항목 삭제").Click += async (_, _) => await DeleteSelectedFromArchiveAsync();
+        _editMenu.Items.Add("파일 추가…").Click += async (_, _) => await AddFilesToArchiveAsync();
+        _editMenu.Items.Add("변경 내용 재압축…").Click += async (_, _) => await SaveArchiveChangesAsync();
+    }
+
+    private void BuildCreateMenu()
+    {
+        _createMenu.Items.Add("파일 압축…").Click += async (_, _) => await CreateFromFilesDialogAsync();
+        _createMenu.Items.Add("폴더 압축…").Click += async (_, _) => await CreateFromFolderDialogAsync();
+    }
+
+    private void BuildItemMenu()
+    {
+        _itemMenu.Items.Add("미리보기").Click += async (_, _) => await PreviewSelectedAsync();
+        _itemMenu.Items.Add("기본 앱에서 열기").Click += async (_, _) => await OpenSelectedInDefaultAppAsync();
+        _itemMenu.Opening += (_, _) =>
+        {
+            bool selected = CanOpenSelection();
+            _itemMenu.Items[0].Enabled = !_busy && CanPreviewSelection();
+            _itemMenu.Items[1].Enabled = !_busy && selected;
+        };
+        _items.ContextMenuStrip = _itemMenu;
+    }
+
+    private async Task EnsureEditWorkspaceAsync()
+    {
+        if (_editWorkspace is not null) return;
+        var snapshot = _snapshot ?? throw new InvalidOperationException("먼저 압축 파일을 여세요.");
+        string workspace = CreateOpenTempFolder();
+        _operation = new CancellationTokenSource();
+        try
+        {
+            var progress = new Progress<(int Done, int Total)>(value =>
+            {
+                _progress.Value = value.Total <= 0 ? 0 : (int)Math.Clamp(value.Done * 1000d / value.Total, 0, 1000);
+                _progressText.Text = value.Total <= 0 ? string.Empty : $"{value.Done:N0} / {value.Total:N0}";
+            });
+            SetBusy(true, "편집용 파일을 준비하는 중…");
+            int count = await ArchiveEngineService.ExtractAsync(snapshot, snapshot.Items.Select(item => item.Index).ToArray(), workspace, _password.Text, progress, _operation.Token);
+            _editWorkspace = workspace;
+            _status.Text = $"편집 준비 완료 · {count:N0}개 항목을 임시 작업 폴더에 풀었습니다.";
+        }
+        catch
+        {
+            try { Directory.Delete(workspace, recursive: true); } catch { }
+            throw;
+        }
+        finally
+        {
+            _operation?.Dispose();
+            _operation = null;
+            SetBusy(false);
+        }
+    }
+
+    private async Task DeleteSelectedFromArchiveAsync()
+    {
+        var snapshot = _snapshot;
+        if (snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
+        var selected = _items.SelectedItems.Cast<ListViewItem>().Select(row => (int)row.Tag!).ToHashSet();
+        if (selected.Count == 0) { MessageBox.Show(this, "삭제할 항목을 선택하세요."); return; }
+        if (MessageBox.Show(this, $"선택한 {selected.Count:N0}개 항목을 압축 내용에서 삭제할까요? 원본 압축 파일은 ‘변경 내용 재압축’을 할 때까지 바뀌지 않습니다.", "압축 내용 편집", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        try
+        {
+            await EnsureEditWorkspaceAsync();
+            foreach (var item in snapshot.Items.Where(item => selected.Contains(item.Index)))
+            {
+                string path = ArchiveEngineService.ResolveSafePath(_editWorkspace!, item.Name);
+                if (item.IsDirectory)
+                {
+                    if (Directory.Exists(path)) Directory.Delete(path, recursive: true);
+                }
+                else if (File.Exists(path)) File.Delete(path);
+            }
+            _editChanges = true;
+            _status.Text = $"선택한 {selected.Count:N0}개 항목을 제거했습니다. ‘파일 편집’에서 변경 내용을 재압축하세요.";
+        }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "항목 삭제 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+    }
+
+    private async Task AddFilesToArchiveAsync()
+    {
+        if (_snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
+        using var dialog = new OpenFileDialog { Title = "압축 파일에 추가할 파일 선택", Multiselect = true, CheckFileExists = true, Filter = "모든 파일|*.*" };
+        if (dialog.ShowDialog(this) != DialogResult.OK) return;
+        if (dialog.FileNames.Any(path => string.Equals(Path.GetFullPath(path), Path.GetFullPath(_snapshot.Path), StringComparison.OrdinalIgnoreCase)))
+        {
+            MessageBox.Show(this, "열려 있는 압축 파일 자체는 다시 추가할 수 없습니다.", "파일 추가", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        try
+        {
+            await EnsureEditWorkspaceAsync();
+            var conflicts = dialog.FileNames.Select(path => Path.Combine(_editWorkspace!, Path.GetFileName(path))).Where(File.Exists).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+            bool overwrite = conflicts.Length == 0 || MessageBox.Show(this, $"같은 이름의 파일 {conflicts.Length:N0}개가 있습니다. 기존 항목을 덮어쓸까요?", "파일 추가", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+            if (!overwrite && conflicts.Length > 0) return;
+            foreach (string source in dialog.FileNames)
+                File.Copy(source, Path.Combine(_editWorkspace!, Path.GetFileName(source)), overwrite: true);
+            _editChanges = true;
+            _status.Text = $"파일 {dialog.FileNames.Length:N0}개를 추가했습니다. ‘파일 편집’에서 변경 내용을 재압축하세요.";
+        }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "파일 추가 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+    }
+
+    private async Task SaveArchiveChangesAsync()
+    {
+        var snapshot = _snapshot;
+        if (snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
+        if (!_editChanges) { MessageBox.Show(this, "먼저 항목을 삭제하거나 파일을 추가하세요.", "변경 내용 재압축", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        if (snapshot.Items.Any(item => item.IsEncrypted) && MessageBox.Show(this, "새 압축 파일은 암호화되지 않습니다. 계속할까요?", "암호 보호 안내", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
+        using var save = new SaveFileDialog
+        {
+            Title = "편집한 압축 파일 저장",
+            Filter = "ZIP 압축 파일 (*.zip)|*.zip|7-Zip 압축 파일 (*.7z)|*.7z",
+            FilterIndex = Path.GetExtension(snapshot.Path).Equals(".7z", StringComparison.OrdinalIgnoreCase) ? 2 : 1,
+            DefaultExt = Path.GetExtension(snapshot.Path).Equals(".7z", StringComparison.OrdinalIgnoreCase) ? "7z" : "zip",
+            AddExtension = true,
+            OverwritePrompt = true,
+            FileName = Path.GetFileNameWithoutExtension(snapshot.Path) + "-편집"
+        };
+        if (save.ShowDialog(this) != DialogResult.OK) return;
+        ArchiveType type = save.FilterIndex == 2 ? ArchiveType.SevenZip : ArchiveType.Zip;
+        string tempOutput = Path.Combine(Path.GetDirectoryName(save.FileName)!, $".{Path.GetFileName(save.FileName)}.{Guid.NewGuid():N}.tmp");
+        int level = _compressionProfile.SelectedIndex switch { 1 => 5, 2 => 9, _ => 1 };
+        bool savedSuccessfully = false;
+        try
+        {
+            await RunOperationAsync("편집한 내용을 다시 압축하는 중…", async (progress, token) =>
+            {
+                int count = await ArchiveEngineService.CreateFromWorkspaceAsync(_editWorkspace!, tempOutput, type, level, progress, token);
+                File.Move(tempOutput, save.FileName, overwrite: true);
+                savedSuccessfully = true;
+                return $"{count:N0}개 파일을 재압축했습니다: {save.FileName}";
+            });
+            if (savedSuccessfully)
+            {
+                _editChanges = false;
+                CleanupEditWorkspace();
+                await OpenArchiveAsync(save.FileName);
+            }
+        }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "재압축 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        finally { try { if (File.Exists(tempOutput)) File.Delete(tempOutput); } catch { } }
+    }
+
+    private void CleanupEditWorkspace()
+    {
+        if (_editWorkspace is not null)
+            try { Directory.Delete(_editWorkspace, recursive: true); } catch { }
+        _editWorkspace = null;
+        _editChanges = false;
     }
 
     private async Task ExtractSelectedAsync(ExtractMode mode)
@@ -547,10 +782,10 @@ public partial class Form1 : Form
         _busy = busy;
         _openButton.Enabled = !busy;
         _extractButton.Enabled = !busy && _snapshot is not null;
-        _previewButton.Enabled = !busy && CanOpenSelection();
+        _previewFileButton.Enabled = !busy && CanPreviewSelection();
+        _editButton.Enabled = !busy && _snapshot is not null;
+        _createButton.Enabled = !busy;
         _testButton.Enabled = !busy && _snapshot is not null;
-        _createFilesButton.Enabled = !busy;
-        _createFolderButton.Enabled = !busy;
         _password.Enabled = !busy;
         _compressionProfile.Enabled = !busy;
         _cancelButton.Enabled = busy;

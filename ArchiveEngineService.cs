@@ -179,6 +179,41 @@ internal static class ArchiveEngineService
         return files.Count;
     }, cancellationToken);
 
+    public static Task<int> CreateFromWorkspaceAsync(
+        string workspace,
+        string outputPath,
+        ArchiveType format,
+        int compressionLevel,
+        IProgress<(int Done, int Total)>? progress,
+        CancellationToken cancellationToken) => Task.Run(() =>
+    {
+        workspace = Path.GetFullPath(workspace);
+        outputPath = Path.GetFullPath(outputPath);
+        string outputFullPath = outputPath;
+        var files = Directory.EnumerateFiles(workspace, "*", SearchOption.AllDirectories)
+            .Select(file => (Source: file, Entry: Path.GetRelativePath(workspace, file).Replace(Path.DirectorySeparatorChar, '/'), Modified: File.GetLastWriteTime(file)))
+            .Where(file => !string.Equals(Path.GetFullPath(file.Source), outputFullPath, StringComparison.OrdinalIgnoreCase))
+            .ToList();
+        if (files.Count == 0) throw new InvalidOperationException("압축할 파일이 없습니다. 파일을 추가한 뒤 저장하세요.");
+        Directory.CreateDirectory(Path.GetDirectoryName(outputFullPath)!);
+        using Stream destination = new FileStream(outputFullPath, FileMode.Create, FileAccess.ReadWrite, FileShare.None, 1024 * 1024, FileOptions.SequentialScan);
+        IWriter writer = format == ArchiveType.SevenZip
+            ? WriterFactory.OpenWriter(destination, ArchiveType.SevenZip, new SevenZipWriterOptions(CompressionType.LZMA2) { CompressionLevel = compressionLevel, LeaveStreamOpen = true })
+            : WriterFactory.OpenWriter(destination, ArchiveType.Zip, new ZipWriterOptions(CompressionType.Deflate) { CompressionLevel = compressionLevel, UseZip64 = true, LeaveStreamOpen = true });
+        using (writer)
+        {
+            int done = 0;
+            foreach (var file in files)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                using Stream input = new FileStream(file.Source, FileMode.Open, FileAccess.Read, FileShare.Read, 1024 * 1024, FileOptions.SequentialScan);
+                writer.Write(file.Entry, input, file.Modified);
+                progress?.Report((++done, files.Count));
+            }
+        }
+        return files.Count;
+    }, cancellationToken);
+
     public static bool IsAlzEgg(string path)
     {
         if (HasAlzEggExtension(path)) return true;
