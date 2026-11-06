@@ -76,6 +76,7 @@ internal static class ArchiveEngineService
                 if (!string.IsNullOrEmpty(entry.LinkTarget))
                     throw new InvalidDataException($"압축 파일 안의 링크 항목은 안전을 위해 건너뜁니다: {entry.Key}");
                 string target = ResolveSafePath(destination, entry.Key ?? string.Empty);
+                EnsureNotArchiveSource(snapshot, target);
                 EnsureNoReparsePoint(destination, target);
                 string? parent = Path.GetDirectoryName(target);
                 if (parent is not null) Directory.CreateDirectory(parent);
@@ -206,6 +207,12 @@ internal static class ArchiveEngineService
         return fullTarget;
     }
 
+    private static void EnsureNotArchiveSource(ArchiveSnapshot snapshot, string target)
+    {
+        if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(snapshot.Path), StringComparison.OrdinalIgnoreCase))
+            throw new InvalidDataException("압축 파일 자체를 덮어쓸 수 있는 항목은 풀 수 없습니다.");
+    }
+
     private static bool HasAlzEggExtension(string path) => Path.GetExtension(path).Equals(".egg", StringComparison.OrdinalIgnoreCase)
         || Path.GetExtension(path).Equals(".alz", StringComparison.OrdinalIgnoreCase);
 
@@ -254,6 +261,7 @@ internal static class ArchiveEngineService
 
     private sealed class UnEggSession : IDisposable
     {
+        private readonly string _archivePath;
         private readonly NativeEventProc _callback;
         private readonly string? _destination;
         private readonly HashSet<int>? _selected;
@@ -275,6 +283,7 @@ internal static class ArchiveEngineService
             IProgress<(int Done, int Total)>? progress = null)
         {
             _callback = OnNativeEvent;
+            _archivePath = Path.GetFullPath(archivePath);
             _password = password;
             _destination = destination is null ? null : Path.GetFullPath(destination);
             _selected = selected;
@@ -355,6 +364,11 @@ internal static class ArchiveEngineService
                         string target;
                         try { target = ResolveSafePath(_destination, archiveName); }
                         catch (InvalidDataException ex) { _callbackError = ex.Message; return ErrorCancel; }
+                        if (string.Equals(Path.GetFullPath(target), _archivePath, StringComparison.OrdinalIgnoreCase))
+                        {
+                            _callbackError = "압축 파일 자체를 덮어쓸 수 있는 항목은 풀 수 없습니다.";
+                            return ErrorCancel;
+                        }
                         if (target.Length >= MaxPath - 1)
                         {
                             _callbackError = $"경로 길이 제한(MAX_PATH)을 넘는 항목은 풀 수 없습니다: {archiveName}";

@@ -26,12 +26,13 @@ public partial class Form1 : Form
     private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(8, 6, 10, 0) };
     private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Style = ProgressBarStyle.Continuous };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
-    private readonly Button _extractButton = ActionButton("선택 항목 풀기", MenuIcon.Extract);
+    private readonly Button _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
     private readonly Button _previewButton = ActionButton("기본 앱으로 열기", MenuIcon.Preview);
     private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
     private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
     private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
     private readonly Button _cancelButton = ActionButton("취소", MenuIcon.Cancel);
+    private readonly ContextMenuStrip _extractMenu = new();
 
     private ArchiveSnapshot? _snapshot;
     private CancellationTokenSource? _operation;
@@ -59,7 +60,8 @@ public partial class Form1 : Form
         DragDrop += OnDragDrop;
         _showPassword.CheckedChanged += (_, _) => _password.UseSystemPasswordChar = !_showPassword.Checked;
         _openButton.Click += async (_, _) => await OpenDialogAsync();
-        _extractButton.Click += async (_, _) => await ExtractSelectedAsync();
+        BuildExtractMenu();
+        _extractButton.Click += (_, _) => _extractMenu.Show(_extractButton, new Point(0, _extractButton.Height));
         _previewButton.Click += async (_, _) => await OpenSelectedInDefaultAppAsync();
         _createFilesButton.Click += async (_, _) => await CreateFromFilesDialogAsync();
         _createFolderButton.Click += async (_, _) => await CreateFromFolderDialogAsync();
@@ -276,22 +278,54 @@ public partial class Form1 : Form
         finally { SetBusy(false); }
     }
 
-    private async Task ExtractSelectedAsync()
+    private void BuildExtractMenu()
     {
-        if (_snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
-        var indices = _items.SelectedIndices.Cast<int>().ToList();
-        if (indices.Count == 0) indices = _snapshot.Items.Select(i => i.Index).ToList();
-        string? baseFolder = ChooseFolder("압축을 풀 저장 위치 선택");
-        if (baseFolder is null) return;
-        string destination = Path.Combine(baseFolder, Path.GetFileNameWithoutExtension(_snapshot.Path) + "_압축풀기");
-        if (Directory.Exists(destination) && Directory.EnumerateFileSystemEntries(destination).Any())
+        _extractMenu.Items.Add("알아서 풀기 · 압축파일 이름 폴더").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.AutoFolder);
+        _extractMenu.Items.Add("현재 폴더에 바로 풀기").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.SameFolder);
+        _extractMenu.Items.Add("폴더 선택해서 풀기…").Click += async (_, _) => await ExtractSelectedAsync(ExtractMode.ChooseFolder);
+    }
+
+    private async Task ExtractSelectedAsync(ExtractMode mode)
+    {
+        var snapshot = _snapshot;
+        if (snapshot is null) { MessageBox.Show(this, "먼저 압축 파일을 여세요."); return; }
+        var indices = _items.SelectedItems.Cast<ListViewItem>().Select(row => (int)row.Tag!).ToList();
+        if (indices.Count == 0) indices = snapshot.Items.Select(i => i.Index).ToList();
+        string archiveFolder = Path.GetDirectoryName(snapshot.Path) ?? Environment.CurrentDirectory;
+        string destination = mode switch
         {
-            var choice = MessageBox.Show(this, "같은 이름의 폴더가 이미 있고 내용이 있습니다. 기존 파일을 덮어쓸 수 있습니다. 계속할까요?", "저장 위치 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning);
-            if (choice != DialogResult.Yes) return;
+            ExtractMode.AutoFolder => Path.Combine(archiveFolder, Path.GetFileNameWithoutExtension(snapshot.Path)),
+            ExtractMode.SameFolder => archiveFolder,
+            ExtractMode.ChooseFolder => ChooseFolder("압축을 풀 위치를 선택하세요. 새 폴더도 만들 수 있습니다.", archiveFolder) ?? string.Empty,
+            _ => string.Empty
+        };
+        if (string.IsNullOrEmpty(destination)) return;
+        if (File.Exists(destination)) { MessageBox.Show(this, "같은 이름의 파일이 있어 저장 폴더로 사용할 수 없습니다.", "압축 풀기", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        var selectedIndices = indices.ToHashSet();
+        var conflicts = new List<string>();
+        try
+        {
+            foreach (var item in snapshot.Items.Where(item => selectedIndices.Contains(item.Index) && !item.IsDirectory))
+            {
+                string target = ArchiveEngineService.ResolveSafePath(destination, item.Name);
+                if (string.Equals(Path.GetFullPath(target), Path.GetFullPath(snapshot.Path), StringComparison.OrdinalIgnoreCase))
+                {
+                    MessageBox.Show(this, "압축 파일 자체를 덮어쓸 수 있는 항목이 포함되어 있어 풀기를 중단했습니다.", "압축 풀기", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                    return;
+                }
+                if (File.Exists(target)) conflicts.Add(target);
+            }
+        }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "저장 경로 확인", MessageBoxButtons.OK, MessageBoxIcon.Warning); return; }
+        conflicts = conflicts.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        if (conflicts.Count > 0)
+        {
+            string message = $"대상 폴더에 같은 이름의 파일 {conflicts.Count:N0}개가 있습니다. 기존 파일을 덮어쓸까요?";
+            if (MessageBox.Show(this, message, "덮어쓰기 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) != DialogResult.Yes) return;
         }
         await RunOperationAsync("압축 해제 중…", async (progress, token) =>
         {
-            int count = await ArchiveEngineService.ExtractAsync(_snapshot, indices, destination, _password.Text, progress, token);
+            int count = await ArchiveEngineService.ExtractAsync(snapshot, indices, destination, _password.Text, progress, token);
             return $"{count:N0}개 항목을 풀었습니다: {destination}";
         });
     }
@@ -390,11 +424,13 @@ public partial class Form1 : Form
         _items.EndUpdate();
     }
 
-    private static string? ChooseFolder(string description)
+    private static string? ChooseFolder(string description, string? initialPath = null)
     {
-        using var dialog = new FolderBrowserDialog { Description = description, ShowNewFolderButton = true };
+        using var dialog = new FolderBrowserDialog { Description = description, ShowNewFolderButton = true, SelectedPath = initialPath ?? string.Empty };
         return dialog.ShowDialog() == DialogResult.OK ? dialog.SelectedPath : null;
     }
+
+    private enum ExtractMode { AutoFolder, SameFolder, ChooseFolder }
 
     private void SetBusy(bool busy, string? status = null)
     {
