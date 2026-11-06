@@ -73,23 +73,27 @@ internal sealed class GlassSurfacePanel : Panel
     }
 }
 
-internal sealed class GlassActionButton : Button
+internal sealed class GlassActionButton : Control
 {
     private bool _hovered;
     private bool _pressed;
+    private Image? _image;
 
     public bool Primary { get; set; }
     public bool Compact { get; set; }
+    public Image? Image
+    {
+        get => _image;
+        set { _image = value; Invalidate(); }
+    }
 
     public GlassActionButton()
     {
-        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Opaque, true);
-        FlatStyle = FlatStyle.Flat;
-        FlatAppearance.BorderSize = 0;
-        UseVisualStyleBackColor = false;
+        SetStyle(ControlStyles.UserPaint | ControlStyles.AllPaintingInWmPaint | ControlStyles.OptimizedDoubleBuffer | ControlStyles.ResizeRedraw | ControlStyles.Selectable, true);
         BackColor = Color.FromArgb(231, 243, 250);
         Cursor = Cursors.Hand;
         TabStop = true;
+        AccessibleRole = AccessibleRole.PushButton;
     }
 
     protected override void OnPaintBackground(PaintEventArgs e)
@@ -187,10 +191,33 @@ internal sealed class GlassActionButton : Button
         TextRenderer.DrawText(g, Text, labelFont, labelRect, ink, TextFormatFlags.HorizontalCenter | TextFormatFlags.VerticalCenter | TextFormatFlags.SingleLine | TextFormatFlags.EndEllipsis | TextFormatFlags.NoPadding);
     }
 
+    protected override bool IsInputKey(Keys keyData) => keyData is Keys.Space or Keys.Enter || base.IsInputKey(keyData);
     protected override void OnMouseEnter(EventArgs e) { _hovered = true; Invalidate(); base.OnMouseEnter(e); }
-    protected override void OnMouseLeave(EventArgs e) { _hovered = false; _pressed = false; Invalidate(); base.OnMouseLeave(e); }
-    protected override void OnMouseDown(MouseEventArgs e) { _pressed = e.Button == MouseButtons.Left; Invalidate(); base.OnMouseDown(e); }
-    protected override void OnMouseUp(MouseEventArgs e) { _pressed = false; Invalidate(); base.OnMouseUp(e); }
+    protected override void OnMouseLeave(EventArgs e) { _hovered = false; if (!Capture) _pressed = false; Invalidate(); base.OnMouseLeave(e); }
+    protected override void OnMouseDown(MouseEventArgs e)
+    {
+        if (e.Button == MouseButtons.Left && Enabled) { Focus(); _pressed = true; Capture = true; Invalidate(); }
+        base.OnMouseDown(e);
+    }
+    protected override void OnMouseUp(MouseEventArgs e)
+    {
+        bool invokeClick = e.Button == MouseButtons.Left && _pressed && ClientRectangle.Contains(e.Location) && Enabled;
+        _pressed = false; Capture = false; Invalidate();
+        base.OnMouseUp(e);
+        if (invokeClick) OnClick(EventArgs.Empty);
+    }
+    protected override void OnKeyDown(KeyEventArgs e)
+    {
+        if ((e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) && !_pressed) { _pressed = true; Invalidate(); e.Handled = true; e.SuppressKeyPress = true; }
+        base.OnKeyDown(e);
+    }
+    protected override void OnKeyUp(KeyEventArgs e)
+    {
+        bool invokeClick = _pressed && (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) && Enabled;
+        if (e.KeyCode == Keys.Space || e.KeyCode == Keys.Enter) { _pressed = false; Invalidate(); e.Handled = true; e.SuppressKeyPress = true; }
+        base.OnKeyUp(e);
+        if (invokeClick) OnClick(EventArgs.Empty);
+    }
     protected override void OnEnabledChanged(EventArgs e) { Invalidate(); base.OnEnabledChanged(e); }
     protected override void OnGotFocus(EventArgs e) { Invalidate(); base.OnGotFocus(e); }
     protected override void OnLostFocus(EventArgs e) { Invalidate(); base.OnLostFocus(e); }

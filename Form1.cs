@@ -29,14 +29,14 @@ public partial class Form1 : Form
     private readonly LinkLabel _updateLink = new() { Text = "업데이트 확인", AutoSize = true, LinkColor = Color.FromArgb(20, 119, 180), ActiveLinkColor = Color.FromArgb(12, 88, 140), VisitedLinkColor = Color.FromArgb(20, 119, 180), BackColor = Color.Transparent, Margin = new Padding(4, 7, 5, 0) };
     private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(8, 6, 10, 0) };
     private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
-    private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
-    private readonly Button _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
-    private readonly Button _previewFileButton = ActionButton("미리보기", MenuIcon.Preview);
-    private readonly Button _createButton = ActionButton("압축 만들기 ▾", MenuIcon.CompressFile);
-    private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
+    private readonly GlassActionButton _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
+    private readonly GlassActionButton _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
+    private readonly GlassActionButton _previewFileButton = ActionButton("미리보기", MenuIcon.Preview);
+    private readonly GlassActionButton _createButton = ActionButton("압축 만들기 ▾", MenuIcon.CompressFile);
+    private readonly GlassActionButton _testButton = ActionButton("압축 검사", MenuIcon.Verify);
     private readonly GlassActionButton _cancelButton = new() { Text = "취소", Image = MenuIconFactory.Create(MenuIcon.Cancel, Color.FromArgb(42, 87, 118), 16), Compact = true, Size = new Size(68, 27), Font = new Font("Segoe UI", 8.5f, FontStyle.Bold), Margin = new Padding(2, 1, 2, 0) };
     private readonly ContextMenuStrip _extractMenu = new();
-    private readonly Button _editButton = ActionButton("파일 편집 ▾", MenuIcon.Settings);
+    private readonly GlassActionButton _editButton = ActionButton("파일 편집 ▾", MenuIcon.Settings);
     private readonly ContextMenuStrip _editMenu = new();
     private readonly ContextMenuStrip _createMenu = new();
     private readonly ContextMenuStrip _itemMenu = new();
@@ -917,7 +917,7 @@ public partial class Form1 : Form
         if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) await OpenInputAsync(files[0]);
     }
 
-    private static Button ActionButton(string label, MenuIcon icon, bool primary = false)
+    private static GlassActionButton ActionButton(string label, MenuIcon icon, bool primary = false)
     {
         var button = new GlassActionButton
         {

@@ -6,7 +6,7 @@
     <AssemblyName>myzip</AssemblyName>
     <Product>myzip</Product>
     <ApplicationIcon>assets\myzip.ico</ApplicationIcon>
-    <Version>1.0.2</Version>
+    <Version>1.0.4</Version>
     <Nullable>enable</Nullable>
     <UseWindowsForms>true</UseWindowsForms>
     <UseWPF>true</UseWPF>
