@@ -4,6 +4,7 @@ namespace MyZip;
 
 public partial class Form1 : Form
 {
+    private readonly ImageList _itemIcons = new() { ImageSize = new Size(18, 18), ColorDepth = ColorDepth.Depth32Bit };
     private readonly ListView _items = new()
     {
         Dock = DockStyle.Fill,
@@ -17,17 +18,17 @@ public partial class Form1 : Form
     private readonly Label _archiveName = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 15, FontStyle.Bold), ForeColor = Color.FromArgb(30, 48, 67), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly Label _archiveInfo = new() { AutoEllipsis = true, Font = new Font("Segoe UI", 9), ForeColor = Color.FromArgb(95, 112, 128), Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft };
     private readonly TextBox _password = new() { Width = 180, UseSystemPasswordChar = true, PlaceholderText = "암호(필요한 경우)" };
-    private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(75, 91, 106), Margin = new Padding(4, 8, 12, 0) };
+    private readonly CheckBox _showPassword = new() { Text = "표시", AutoSize = true, ForeColor = Color.FromArgb(75, 91, 106), Margin = new Padding(4, 5, 12, 0), ImageAlign = ContentAlignment.MiddleLeft, TextImageRelation = TextImageRelation.ImageBeforeText };
     private readonly ComboBox _compressionProfile = new() { DropDownStyle = ComboBoxStyle.DropDownList, Width = 130 };
     private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, ForeColor = Color.FromArgb(78, 95, 111) };
     private readonly Label _progressText = new() { AutoSize = true, TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(8, 6, 10, 0) };
     private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Style = ProgressBarStyle.Continuous };
-    private readonly Button _openButton = ActionButton("압축 파일 열기", "▣", primary: true);
-    private readonly Button _extractButton = ActionButton("선택 항목 풀기", "↓");
-    private readonly Button _createFilesButton = ActionButton("파일 압축", "＋");
-    private readonly Button _createFolderButton = ActionButton("폴더 압축", "▰");
-    private readonly Button _testButton = ActionButton("압축 검사", "✓");
-    private readonly Button _cancelButton = ActionButton("취소", "×");
+    private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
+    private readonly Button _extractButton = ActionButton("선택 항목 풀기", MenuIcon.Extract);
+    private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
+    private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
+    private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
+    private readonly Button _cancelButton = ActionButton("취소", MenuIcon.Cancel);
 
     private ArchiveSnapshot? _snapshot;
     private CancellationTokenSource? _operation;
@@ -42,6 +43,7 @@ public partial class Form1 : Form
     private void BuildUi()
     {
         Text = "myzip · 파일 압축 도구";
+        Icon = System.Drawing.Icon.ExtractAssociatedIcon(Application.ExecutablePath) ?? System.Drawing.SystemIcons.Application;
         StartPosition = FormStartPosition.CenterScreen;
         MinimumSize = new Size(840, 570);
         Size = new Size(1120, 740);
@@ -64,6 +66,10 @@ public partial class Form1 : Form
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("형식", 90);
         _items.Columns.Add("수정한 날짜", 165);
+        _items.SmallImageList = _itemIcons;
+        _itemIcons.Images.Add("file", MenuIconFactory.Create(MenuIcon.File, Color.FromArgb(47, 105, 154), 18));
+        _itemIcons.Images.Add("folder", MenuIconFactory.Create(MenuIcon.Folder, Color.FromArgb(209, 148, 38), 18));
+        _showPassword.Image = MenuIconFactory.Create(MenuIcon.Eye, Color.FromArgb(75, 91, 106), 17);
 
         var root = new TableLayoutPanel { Dock = DockStyle.Fill, ColumnCount = 1, RowCount = 5, Padding = new Padding(20), BackColor = BackColor };
         root.RowStyles.Add(new RowStyle(SizeType.Absolute, 84));
@@ -87,10 +93,12 @@ public partial class Form1 : Form
         root.Controls.Add(actions, 0, 1);
 
         var options = new FlowLayoutPanel { Dock = DockStyle.Fill, FlowDirection = FlowDirection.LeftToRight, WrapContents = false, Margin = new Padding(0), Padding = new Padding(0, 5, 0, 0) };
+        options.Controls.Add(new PictureBox { Image = MenuIconFactory.Create(MenuIcon.Password, Color.FromArgb(78, 95, 111), 18), Size = new Size(22, 24), SizeMode = PictureBoxSizeMode.CenterImage, Margin = new Padding(0, 4, 2, 0) });
         options.Controls.Add(new Label { Text = "암호", AutoSize = true, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(0, 8, 8, 0) });
         options.Controls.Add(_password);
         options.Controls.Add(_showPassword);
-        options.Controls.Add(new Label { Text = "새 압축 설정", AutoSize = true, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(12, 8, 8, 0) });
+        options.Controls.Add(new PictureBox { Image = MenuIconFactory.Create(MenuIcon.Settings, Color.FromArgb(78, 95, 111), 18), Size = new Size(20, 24), SizeMode = PictureBoxSizeMode.CenterImage, Margin = new Padding(8, 4, 0, 0) });
+        options.Controls.Add(new Label { Text = "새 압축 설정", AutoSize = true, ForeColor = Color.FromArgb(78, 95, 111), Margin = new Padding(0, 8, 8, 0) });
         _compressionProfile.Items.AddRange(["빠르게", "균형", "작은 크기"]);
         _compressionProfile.SelectedIndex = 0;
         options.Controls.Add(_compressionProfile);
@@ -255,7 +263,7 @@ public partial class Form1 : Form
         _items.Items.Clear();
         foreach (var entry in snapshot.Items)
         {
-            var row = new ListViewItem(entry.IsDirectory ? "▰  " + entry.Name : "   " + entry.Name) { Tag = entry.Index };
+            var row = new ListViewItem(entry.Name) { Tag = entry.Index, ImageKey = entry.IsDirectory ? "folder" : "file" };
             row.SubItems.Add(entry.IsDirectory ? "—" : FormatSize(entry.Size));
             row.SubItems.Add(entry.IsDirectory ? "—" : FormatSize(entry.PackedSize));
             row.SubItems.Add(entry.IsEncrypted ? "암호화" : entry.IsDirectory ? "폴더" : Path.GetExtension(entry.Name).TrimStart('.').ToUpperInvariant());
@@ -298,9 +306,13 @@ public partial class Form1 : Form
         if (e.Data?.GetData(DataFormats.FileDrop) is string[] files && files.Length > 0) await OpenArchiveAsync(files[0]);
     }
 
-    private static Button ActionButton(string label, string glyph, bool primary = false) => new()
+    private static Button ActionButton(string label, MenuIcon icon, bool primary = false) => new()
     {
-        Text = $"{glyph}  {label}",
+        Text = label,
+        Image = MenuIconFactory.Create(icon, primary ? Color.White : Color.FromArgb(29, 119, 178)),
+        ImageAlign = ContentAlignment.MiddleLeft,
+        TextImageRelation = TextImageRelation.ImageBeforeText,
+        TextAlign = ContentAlignment.MiddleCenter,
         AutoSize = true,
         Height = 42,
         Margin = new Padding(4, 0, 4, 0),
