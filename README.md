@@ -11,6 +11,9 @@ myzip is an independent, ad-free Windows x64 archive utility. The source code wr
 - Open an archive immediately when Windows launches myzip with a file path (including ZIP double-click associations).
 - Block archive path traversal and refuse links that could redirect extraction outside the destination.
 - Open archive entries in their Windows default applications; files stage in a private temporary folder, and EXE/MSI launches require confirmation.
+- Preview images, PDF, text, Office Open XML, and HWPX entries from the archive. Office and HWPX previews extract readable text and do not reproduce original page layout.
+- Check archive entries before extracting or deleting them; an empty check selection extracts the full archive.
+- Add files or remove checked entries, then save the edited contents as a new ZIP or 7z archive.
 - Optional ALZ/EGG extraction support through ESTsoft's unmodified UnEGG64 module. This module is not included in this repository or covered by the project's MIT license.
 
 ## License and third-party components
@@ -32,6 +35,8 @@ dotnet publish .\myzip.csproj -c Release -r win-x64 --self-contained true
 ```
 
 The self-contained build emits a single `myzip.exe`. To enable optional ALZ/EGG support for personal use, obtain the official module and build with `-p:IncludeUnEggModule=true`; the module must be placed at `vendor/estsoft/UnEGG64.dll` and is copied separately next to `myzip.exe`. Without that module, other supported archive formats remain available.
+
+To create the Windows setup program, publish the personal build to `publish-personal` and compile [`installer/myzip.iss`](installer/myzip.iss) with Inno Setup 7. The installer defaults to `{autopf}\myzip` (on x64 Windows, `C:\Program Files\myzip`) and creates a Start menu shortcut. A desktop shortcut is optional.
 
 When myzip is selected as the `.zip` default app in Windows Settings, Windows passes the double-clicked archive path to the app. myzip reads that argument and opens the archive directly. Double-clicking a file inside an archive extracts it to a private temporary folder and opens it with its Windows default application. Files remain available in `%TEMP%\myzip-open` and folders older than seven days are cleaned up when myzip next opens. EXE/MSI entries require explicit confirmation; EXE packages and their archive contents are staged together, while MSI files are launched through Windows Installer in interactive mode. Installation elevation prompts are handled by Windows. Viewer and codec support depends on the applications installed on the PC.
 
