@@ -1,4 +1,5 @@
 using System.IO;
+using System.Diagnostics;
 using SharpCompress.Common;
 
 namespace MyZip;
@@ -26,7 +27,7 @@ public partial class Form1 : Form
     private readonly ProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Style = ProgressBarStyle.Continuous };
     private readonly Button _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly Button _extractButton = ActionButton("선택 항목 풀기", MenuIcon.Extract);
-    private readonly Button _previewButton = ActionButton("미리보기", MenuIcon.Preview);
+    private readonly Button _previewButton = ActionButton("기본 앱으로 열기", MenuIcon.Preview);
     private readonly Button _createFilesButton = ActionButton("파일 압축", MenuIcon.CompressFile);
     private readonly Button _createFolderButton = ActionButton("폴더 압축", MenuIcon.CompressFolder);
     private readonly Button _testButton = ActionButton("압축 검사", MenuIcon.Verify);
@@ -59,18 +60,14 @@ public partial class Form1 : Form
         _showPassword.CheckedChanged += (_, _) => _password.UseSystemPasswordChar = !_showPassword.Checked;
         _openButton.Click += async (_, _) => await OpenDialogAsync();
         _extractButton.Click += async (_, _) => await ExtractSelectedAsync();
-        _previewButton.Click += async (_, _) => await PreviewSelectedAsync();
+        _previewButton.Click += async (_, _) => await OpenSelectedInDefaultAppAsync();
         _createFilesButton.Click += async (_, _) => await CreateFromFilesDialogAsync();
         _createFolderButton.Click += async (_, _) => await CreateFromFolderDialogAsync();
         _testButton.Click += async (_, _) => await TestArchiveAsync();
         _cancelButton.Click += (_, _) => _operation?.Cancel();
         _cancelButton.Enabled = false;
-        _items.DoubleClick += async (_, _) =>
-        {
-            if (CanPreviewSelection()) await PreviewSelectedAsync();
-            else await ExtractSelectedAsync();
-        };
-        _items.SelectedIndexChanged += (_, _) => _previewButton.Enabled = !_busy && CanPreviewSelection();
+        _items.DoubleClick += async (_, _) => await OpenSelectedInDefaultAppAsync();
+        _items.SelectedIndexChanged += (_, _) => _previewButton.Enabled = !_busy && CanOpenSelection();
         _items.Columns.Add("이름", 500);
         _items.Columns.Add("크기", 115, HorizontalAlignment.Right);
         _items.Columns.Add("압축 크기", 115, HorizontalAlignment.Right);
@@ -157,37 +154,37 @@ public partial class Form1 : Form
             return;
         }
         if (IsArchivePath(path)) { await OpenArchiveAsync(path); return; }
-        if (PreviewContent.CanPreview(path)) { ShowStandalonePreview(path); return; }
-        MessageBox.Show(this, "지원하는 압축 파일이나 미리보기 가능한 문서·사진·영상 파일을 선택하세요.", "지원하지 않는 파일", MessageBoxButtons.OK, MessageBoxIcon.Information);
+        if (IsInstaller(path) && !ConfirmInstallerExecution(path)) return;
+        OpenInDefaultApp(path);
     }
 
     private static bool IsArchivePath(string path) => Path.GetExtension(path).ToLowerInvariant() is
         ".zip" or ".7z" or ".rar" or ".egg" or ".alz" or ".tar" or ".gz" or ".bz2" or ".xz" or ".zst" or ".cab" or ".arj" or ".ace" or ".lzh" or ".arc" or ".iso" or ".wim" or ".001";
 
-    private bool CanPreviewSelection()
+    private bool CanOpenSelection()
     {
         if (_snapshot is null || _items.SelectedIndices.Count != 1) return false;
         var item = _snapshot.Items[_items.SelectedIndices[0]];
-        return !item.IsDirectory && PreviewContent.CanPreview(item.Name);
+        return !item.IsDirectory;
     }
 
-    private async Task PreviewSelectedAsync()
+    private async Task OpenSelectedInDefaultAppAsync()
     {
         if (_snapshot is null || _items.SelectedIndices.Count != 1)
         {
-            MessageBox.Show(this, "미리볼 파일 하나를 선택하세요.", "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "열 파일 하나를 선택하세요.", "파일 열기", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
         var item = _snapshot.Items[_items.SelectedIndices[0]];
-        if (item.IsDirectory || !PreviewContent.CanPreview(item.Name))
+        if (item.IsDirectory)
         {
-            MessageBox.Show(this, "이 항목은 미리보기를 지원하지 않습니다.", "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information);
+            MessageBox.Show(this, "파일을 선택하세요. 폴더는 ‘선택 항목 풀기’로 임시 폴더에 풀 수 있습니다.", "파일 열기", MessageBoxButtons.OK, MessageBoxIcon.Information);
             return;
         }
-        try { PreviewContent.EnsurePreviewSize(item.Size); }
-        catch (Exception ex) { MessageBox.Show(this, ex.Message, "미리보기", MessageBoxButtons.OK, MessageBoxIcon.Information); return; }
+        bool installer = IsInstaller(item.Name);
+        if (installer && !ConfirmInstallerExecution(item.Name, fromArchive: true)) return;
 
-        string tempFolder = Path.Combine(Path.GetTempPath(), "myzip-preview", Guid.NewGuid().ToString("N"));
+        string tempFolder = CreateOpenTempFolder();
         Directory.CreateDirectory(tempFolder);
         _operation = new CancellationTokenSource();
         var progress = new Progress<(int Done, int Total)>(value =>
@@ -195,36 +192,66 @@ public partial class Form1 : Form
             _progress.Value = value.Total <= 0 ? 0 : (int)Math.Clamp(value.Done * 1000d / value.Total, 0, 1000);
             _progressText.Text = value.Total <= 0 ? string.Empty : $"{value.Done:N0} / {value.Total:N0}";
         });
-        SetBusy(true, "미리보기 파일을 준비하는 중…");
-        bool previewOwnsTemp = false;
+        SetBusy(true, installer ? "설치 파일과 필요한 파일을 준비하는 중…" : "파일을 임시 폴더에 준비하는 중…");
+        bool retainTemp = false;
         try
         {
-            await ArchiveEngineService.ExtractAsync(_snapshot, [item.Index], tempFolder, _password.Text, progress, _operation.Token);
+            IReadOnlyCollection<int> indices = installer
+                ? _snapshot.Items.Select(entry => entry.Index).ToArray()
+                : [item.Index];
+            await ArchiveEngineService.ExtractAsync(_snapshot, indices, tempFolder, _password.Text, progress, _operation.Token);
             string extractedPath = ArchiveEngineService.ResolveSafePath(tempFolder, item.Name);
-            var preview = new FilePreviewForm(extractedPath, item.Name, tempFolder);
-            previewOwnsTemp = true;
-            preview.ShowDialog(this);
+            if (!File.Exists(extractedPath)) throw new FileNotFoundException("압축 파일에서 실행할 항목을 찾지 못했습니다.", extractedPath);
+            OpenInDefaultApp(extractedPath);
+            retainTemp = true;
+            _status.Text = installer ? "설치 프로그램을 시작했습니다. 설치가 끝날 때까지 임시 파일을 유지합니다." : "기본 응용 프로그램에서 열었습니다. 임시 파일은 일주일 뒤 정리됩니다.";
         }
-        catch (OperationCanceledException) { _status.Text = "미리보기를 취소했습니다."; }
-        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "미리보기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch (OperationCanceledException) { _status.Text = "파일 열기를 취소했습니다."; }
+        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "파일 열기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
         finally
         {
-            if (!previewOwnsTemp) try { Directory.Delete(tempFolder, recursive: true); } catch { }
+            if (!retainTemp) try { Directory.Delete(tempFolder, recursive: true); } catch { }
             _operation.Dispose();
             _operation = null;
             SetBusy(false);
         }
     }
 
-    private void ShowStandalonePreview(string path)
+    private static string CreateOpenTempFolder()
     {
+        string root = Path.Combine(Path.GetTempPath(), "myzip-open");
+        Directory.CreateDirectory(root);
         try
         {
-            PreviewContent.EnsurePreviewSize(new FileInfo(path).Length);
-            using var preview = new FilePreviewForm(path, Path.GetFileName(path));
-            preview.ShowDialog(this);
+            foreach (string oldFolder in Directory.EnumerateDirectories(root))
+                if (Directory.GetCreationTimeUtc(oldFolder) < DateTime.UtcNow.AddDays(-7))
+                    try { Directory.Delete(oldFolder, recursive: true); } catch { }
         }
-        catch (Exception ex) { MessageBox.Show(this, FriendlyError(ex), "미리보기 실패", MessageBoxButtons.OK, MessageBoxIcon.Warning); }
+        catch { }
+        string folder = Path.Combine(root, Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(folder);
+        return folder;
+    }
+
+    private static bool IsExecutable(string path) => Path.GetExtension(path).Equals(".exe", StringComparison.OrdinalIgnoreCase);
+    private static bool IsInstaller(string path) => Path.GetExtension(path).Equals(".msi", StringComparison.OrdinalIgnoreCase) || IsExecutable(path);
+
+    private bool ConfirmInstallerExecution(string path, bool fromArchive = false) => MessageBox.Show(this,
+        $"{(fromArchive ? "압축 파일의 " : string.Empty)}실행 파일을 시작합니다. 프로그램이 설치되거나 시스템을 변경할 수 있습니다. 계속할까요?\r\n\r\n{path}",
+        "설치 파일 실행 확인", MessageBoxButtons.YesNo, MessageBoxIcon.Warning) == DialogResult.Yes;
+
+    private static void OpenInDefaultApp(string path)
+    {
+        string extension = Path.GetExtension(path);
+        if (extension.Equals(".msi", StringComparison.OrdinalIgnoreCase))
+        {
+            var installer = new ProcessStartInfo("msiexec.exe") { UseShellExecute = false };
+            installer.ArgumentList.Add("/i");
+            installer.ArgumentList.Add(Path.GetFullPath(path));
+            Process.Start(installer);
+            return;
+        }
+        Process.Start(new ProcessStartInfo(Path.GetFullPath(path)) { UseShellExecute = true, Verb = "open" });
     }
 
     private async Task OpenArchiveAsync(string path)
@@ -374,7 +401,7 @@ public partial class Form1 : Form
         _busy = busy;
         _openButton.Enabled = !busy;
         _extractButton.Enabled = !busy && _snapshot is not null;
-        _previewButton.Enabled = !busy && CanPreviewSelection();
+        _previewButton.Enabled = !busy && CanOpenSelection();
         _testButton.Enabled = !busy && _snapshot is not null;
         _createFilesButton.Enabled = !busy;
         _createFolderButton.Enabled = !busy;

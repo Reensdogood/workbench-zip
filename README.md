@@ -10,7 +10,7 @@ myzip is an independent, ad-free Windows x64 archive utility. The source code wr
 - Drag and drop archives into the window.
 - Open an archive immediately when Windows launches myzip with a file path (including ZIP double-click associations).
 - Block archive path traversal and refuse links that could redirect extraction outside the destination.
-- Preview text and PDF files, common images, Office Open XML documents, and supported video/audio formats from inside an archive or when opened directly.
+- Open archive entries in their Windows default applications; files stage in a private temporary folder, and EXE/MSI launches require confirmation.
 - Optional ALZ/EGG extraction support through ESTsoft's unmodified UnEGG64 module. This module is not included in this repository or covered by the project's MIT license.
 
 ## License and third-party components
@@ -33,9 +33,7 @@ dotnet publish .\myzip.csproj -c Release -r win-x64 --self-contained true
 
 The self-contained build emits a single `myzip.exe`. To enable optional ALZ/EGG support for personal use, obtain the official module and build with `-p:IncludeUnEggModule=true`; the module must be placed at `vendor/estsoft/UnEGG64.dll` and is copied separately next to `myzip.exe`. Without that module, other supported archive formats remain available.
 
-PDF previews use the Microsoft Edge WebView2 Runtime, normally installed with current Windows 10/11 systems. Video playback uses Windows media components and works only for codecs supported by that PC.
-
-When myzip is selected as the `.zip` default app in Windows Settings, Windows passes the double-clicked archive path to the app. myzip reads that argument and opens the archive directly. Image previews include PNG, JPEG, BMP, GIF, and TIFF; document previews include PDF, plain text, and the text content of DOCX/XLSX/PPTX. Video/audio preview uses Windows' installed codecs and may not support every codec or container.
+When myzip is selected as the `.zip` default app in Windows Settings, Windows passes the double-clicked archive path to the app. myzip reads that argument and opens the archive directly. Double-clicking a file inside an archive extracts it to a private temporary folder and opens it with its Windows default application. Files remain available in `%TEMP%\myzip-open` and folders older than seven days are cleaned up when myzip next opens. EXE/MSI entries require explicit confirmation; EXE packages and their archive contents are staged together, while MSI files are launched through Windows Installer in interactive mode. Installation elevation prompts are handled by Windows. Viewer and codec support depends on the applications installed on the PC.
 
 ## Folder layout
 
