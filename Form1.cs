@@ -50,8 +50,38 @@ public partial class Form1 : Form
     {
         InitializeComponent();
         BuildUi();
-        if (startupArgs?.FirstOrDefault() is { Length: > 0 } startupPath)
-            Shown += async (_, _) => await OpenInputAsync(startupPath);
+        if (startupArgs is { Length: > 0 })
+        {
+            if (startupArgs[0].Equals("--compress", StringComparison.OrdinalIgnoreCase))
+                Shown += async (_, _) => await RunShellCompressAsync(startupArgs.Skip(1).ToArray());
+            else if (startupArgs[0].Equals("--extract", StringComparison.OrdinalIgnoreCase))
+                Shown += async (_, _) => await RunShellExtractAsync(startupArgs.Skip(1).FirstOrDefault());
+            else
+                Shown += async (_, _) => await OpenInputAsync(startupArgs[0]);
+        }
+    }
+
+    private async Task RunShellCompressAsync(IReadOnlyList<string> paths)
+    {
+        var inputs = paths.Where(path => File.Exists(path) || Directory.Exists(path)).Distinct(StringComparer.OrdinalIgnoreCase).ToArray();
+        if (inputs.Length == 0)
+        {
+            MessageBox.Show(this, "압축할 파일이나 폴더를 찾지 못했습니다.", "myzip으로 압축", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        await CreateArchiveDialogAsync(inputs);
+    }
+
+    private async Task RunShellExtractAsync(string? path)
+    {
+        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path) || !IsArchivePath(path))
+        {
+            MessageBox.Show(this, "압축 파일을 찾지 못했거나 지원하지 않는 형식입니다.", "myzip으로 압축 해제", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+            return;
+        }
+        await OpenArchiveAsync(path);
+        if (_snapshot is not null && string.Equals(Path.GetFullPath(path), Path.GetFullPath(_snapshot.Path), StringComparison.OrdinalIgnoreCase))
+            await ExtractSelectedAsync(ExtractMode.AutoFolder);
     }
 
     private void BuildUi()

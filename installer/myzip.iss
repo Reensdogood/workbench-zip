@@ -39,3 +39,88 @@ Name: "{autodesktop}\myzip"; Filename: "{app}\myzip.exe"; WorkingDir: "{app}"; T
 
 [Run]
 Filename: "{app}\myzip.exe"; Description: "myzip 실행"; Flags: postinstall nowait skipifsilent
+
+; Explorer context menu: compress one selected file or folder.
+[Registry]
+Root: HKCR; Subkey: "*\shell\myzip_compress"; ValueType: string; ValueData: "myzip으로 압축"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "*\shell\myzip_compress"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "*\shell\myzip_compress"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "*\shell\myzip_compress\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --compress ""%1"""
+Root: HKCR; Subkey: "Directory\shell\myzip_compress"; ValueType: string; ValueData: "myzip으로 압축"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "Directory\shell\myzip_compress"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "Directory\shell\myzip_compress"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "Directory\shell\myzip_compress\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --compress ""%1"""
+
+; Extract archive files into a folder named after the archive, beside the archive.
+Root: HKCR; Subkey: "SystemFileAssociations\.zip\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.zip\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.zip\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.zip\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.7z\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.7z\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.7z\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.7z\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.rar\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.rar\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.rar\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.rar\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.egg\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.egg\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.egg\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.egg\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.alz\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.alz\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.alz\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.alz\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.tar\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.tar\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.tar\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.tar\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.gz\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.gz\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.gz\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.gz\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.bz2\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.bz2\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.bz2\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.bz2\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.xz\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.xz\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.xz\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.xz\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.zst\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.zst\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.zst\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.zst\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.cab\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.cab\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.cab\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.cab\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.arj\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.arj\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.arj\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.arj\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.ace\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.ace\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.ace\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.ace\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.lzh\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.lzh\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.lzh\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.lzh\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.arc\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.arc\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.arc\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.arc\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.iso\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.iso\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.iso\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.iso\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.wim\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.wim\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.wim\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.wim\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
+Root: HKCR; Subkey: "SystemFileAssociations\.001\shell\myzip_extract"; ValueType: string; ValueData: "myzip으로 압축 해제"; Flags: uninsdeletekey
+Root: HKCR; Subkey: "SystemFileAssociations\.001\shell\myzip_extract"; ValueName: "Icon"; ValueType: string; ValueData: "{app}\myzip.exe,0"
+Root: HKCR; Subkey: "SystemFileAssociations\.001\shell\myzip_extract"; ValueName: "MultiSelectModel"; ValueType: string; ValueData: "Single"
+Root: HKCR; Subkey: "SystemFileAssociations\.001\shell\myzip_extract\command"; ValueType: string; ValueData: """{app}\myzip.exe"" --extract ""%1"""
