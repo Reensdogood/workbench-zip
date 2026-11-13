@@ -260,7 +260,8 @@ internal static class ArchiveEngineService
     private static IArchive OpenSharpArchive(string path, string? password) => ArchiveFactory.OpenArchive(path, new ReaderOptions
     {
         Password = string.IsNullOrWhiteSpace(password) ? null : password,
-        LeaveStreamOpen = false
+        LeaveStreamOpen = false,
+        ArchiveEncoding = TextEncodingResolver.CreateArchiveEncoding()
     });
 
     private static void EnsureNoReparsePoint(string root, string target)

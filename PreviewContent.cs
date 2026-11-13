@@ -39,7 +39,7 @@ internal static partial class PreviewContent
         var info = new FileInfo(path);
         if (info.Length > 16 * 1024 * 1024)
             throw new InvalidDataException("텍스트 미리보기는 16MB 이하 파일만 지원합니다.");
-        return File.ReadAllText(path);
+        return TextEncodingResolver.ReadTextFile(path);
     }
 
     private static string ReadDocx(string path)

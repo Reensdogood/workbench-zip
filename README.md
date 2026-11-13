@@ -41,6 +41,8 @@ To create the Windows setup program, publish the public build to `publish-public
 
 The Explorer commands are registered for one selected item at a time. On Windows 11 they may be listed under **Show more options** because the installer uses built-in registry verbs instead of an in-process Explorer extension.
 
+Archive entry names honor UTF-8 markers and otherwise try common Korean, Japanese, Chinese, Cyrillic, Western, and DOS code pages so older archives with non-Unicode names remain readable. Text previews honor UTF-8/UTF-16/UTF-32 byte-order marks, prefer valid UTF-8, and detect common legacy encodings when UTF-8 is invalid or appears mojibaked. Decoding only changes the displayed text; archive and document bytes are left untouched. Text whose original bytes were already replaced with `�` or otherwise discarded cannot be reconstructed reliably.
+
 ## GitHub releases and automatic updates
 
 The app checks the latest public GitHub Release once per day at startup. If a newer version is available, myzip shows its release notes and asks before downloading the installer. It verifies the installer against the SHA-256 asset and then starts the setup program for the current install folder; Windows may request administrator approval. The app never installs an unverified file.
