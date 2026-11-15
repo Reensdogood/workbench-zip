@@ -29,6 +29,7 @@ public partial class Form1 : Form
     private readonly Label _status = new() { AutoEllipsis = true, Dock = DockStyle.Fill, TextAlign = ContentAlignment.MiddleLeft, Font = new Font("Segoe UI", 9.5f), ForeColor = Color.FromArgb(38, 72, 96), BackColor = Color.Transparent, Margin = new Padding(0) };
     private readonly LinkLabel _updateLink = new() { Text = "업데이트 확인", AutoSize = true, Font = new Font("Segoe UI", 9f, FontStyle.Bold), LinkColor = Color.FromArgb(20, 119, 180), ActiveLinkColor = Color.FromArgb(12, 88, 140), VisitedLinkColor = Color.FromArgb(20, 119, 180), BackColor = Color.Transparent, TextAlign = ContentAlignment.MiddleCenter, Margin = new Padding(0) };
     private readonly Label _progressText = new() { AutoSize = true, Font = new Font("Segoe UI", 8.75f), TextAlign = ContentAlignment.MiddleRight, ForeColor = Color.FromArgb(55, 99, 127), BackColor = Color.Transparent, Margin = new Padding(4, 0, 8, 0) };
+    private readonly ToolTip _toolTips = new() { ShowAlways = true, InitialDelay = 450, ReshowDelay = 100 };
     private readonly GlassProgressBar _progress = new() { Dock = DockStyle.Fill, Minimum = 0, Maximum = 1000, Margin = new Padding(0, 4, 0, 0) };
     private readonly GlassActionButton _openButton = ActionButton("압축 파일 열기", MenuIcon.OpenArchive, primary: true);
     private readonly GlassActionButton _extractButton = ActionButton("압축 풀기 ▾", MenuIcon.Extract);
@@ -192,6 +193,7 @@ public partial class Form1 : Form
         _testButton.Click += async (_, _) => await TestArchiveAsync();
         _cancelButton.Click += (_, _) => _operation?.Cancel();
         _cancelButton.Enabled = false;
+        _toolTips.SetToolTip(_previewFileButton, "압축 파일을 연 뒤 미리 볼 파일을 하나 선택하거나 체크하고 누르세요. 이미지·문서·텍스트·영상·오디오를 별도 창에서 확인합니다.");
         _items.DoubleClick += async (_, _) => await OpenSelectedInDefaultAppAsync();
         _items.MouseUp += (_, e) =>
         {
@@ -201,6 +203,7 @@ public partial class Form1 : Form
         };
         _items.ItemChecked += (_, _) =>
         {
+            UpdateSelectionActions();
             if (!_busy && _snapshot is not null && _items.CheckedItems.Count > 0)
                 _status.Text = $"{_items.CheckedItems.Count:N0}개 항목 체크됨 · 압축 풀기 또는 파일 편집 작업에 적용됩니다.";
         };
@@ -436,8 +439,29 @@ public partial class Form1 : Form
 
     private bool CanPreviewSelection()
     {
-        if (!CanOpenSelection() || _snapshot is null) return false;
-        return PreviewContent.CanPreview(_snapshot.Items[_items.SelectedIndices[0]].Name);
+        return GetPreviewTarget() is not null;
+    }
+
+    private ArchiveItem? GetPreviewTarget()
+    {
+        if (_snapshot is null || _items.CheckedItems.Count > 1) return null;
+
+        ArchiveItem? item;
+        if (_items.CheckedItems.Count == 1)
+        {
+            int index = (int)_items.CheckedItems[0].Tag!;
+            item = _snapshot.Items[index];
+        }
+        else if (_items.SelectedIndices.Count == 1)
+        {
+            item = _snapshot.Items[_items.SelectedIndices[0]];
+        }
+        else
+        {
+            return null;
+        }
+
+        return !item.IsDirectory && PreviewContent.CanPreview(item.Name) ? item : null;
     }
 
     private void UpdateSelectionActions()
@@ -448,9 +472,9 @@ public partial class Form1 : Form
 
     private async Task PreviewSelectedAsync()
     {
-        if (!CanPreviewSelection() || _snapshot is null) return;
+        var item = GetPreviewTarget();
+        if (item is null || _snapshot is null) return;
         var snapshot = _snapshot;
-        var item = snapshot.Items[_items.SelectedIndices[0]];
         string tempFolder = CreateOpenTempFolder();
         _operation = new CancellationTokenSource();
         var progress = new Progress<(int Done, int Total)>(value =>
@@ -582,7 +606,7 @@ public partial class Form1 : Form
             string encrypted = snapshot.Items.Any(i => i.IsEncrypted) ? " · 암호 보호" : string.Empty;
             string solid = snapshot.IsSolid ? " · 솔리드" : string.Empty;
             _archiveInfo.Text = $"{snapshot.Format ?? Path.GetExtension(path).TrimStart('.').ToUpperInvariant()} · {snapshot.Items.Count:N0}개 항목{encrypted}{solid}";
-            _status.Text = "열기 완료 · 풀 항목을 선택하거나 압축 검사를 실행하세요.";
+            _status.Text = "열기 완료 · 항목을 클릭하거나 체크한 뒤 ‘미리보기’를 누를 수 있습니다.";
         }
         catch (Exception ex)
         {
